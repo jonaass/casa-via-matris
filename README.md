@@ -5,7 +5,9 @@ principal do sistema de controle de **estoque, doações e finanças** da Casa V
 
 ## Versão no ar
 
-https://claude.ai/artifact/F35rATqA4U4auPk9hcAL25 (privada até ser compartilhada pelo menu "Compartilhar").
+- GitHub Pages: https://jonaass.github.io/casa-via-matris/ (atualiza sozinho a cada `git push` na branch `main`)
+- Artifact do Claude: https://claude.ai/artifact/F35rATqA4U4auPk9hcAL25
+
 Cada pessoa que abre vê os próprios dados de exemplo; o que uma registra não aparece para as outras.
 
 Para atualizar o site depois de mudar o código, gere a versão de publicação:
