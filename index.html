@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Casa Via Matris | Gestão de recursos</title>
+  <meta name="description" content="Protótipo do sistema de controle de estoque, doações e finanças da Casa Via Matris.">
+  <!-- CSP: só aceita scripts deste próprio site e fontes do Google. Barra injeção de script de terceiros. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; base-uri 'none'; form-action 'self'">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&display=swap">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <a class="pular" href="#conteudo">Pular para o conteúdo</a>
+
+  <div class="app">
+    <aside class="lateral">
+      <div class="marca">
+        <svg viewBox="0 0 40 40" aria-hidden="true" class="marca-icone">
+          <path d="M6 19 20 7l14 12v14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2Z" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round"/>
+          <path d="M20 30s-6-3.6-6-8a3.2 3.2 0 0 1 6-1.6 3.2 3.2 0 0 1 6 1.6c0 4.4-6 8-6 8Z" fill="currentColor"/>
+        </svg>
+        <div>
+          <strong>Casa Via Matris</strong>
+          <span>Gestão de recursos</span>
+        </div>
+      </div>
+
+      <nav aria-label="Seções do painel">
+        <a href="#resumo">Visão geral</a>
+        <a href="#despensa">Estoque</a>
+        <a href="#registrar">Registrar</a>
+        <a href="#historico">Histórico</a>
+      </nav>
+
+      <details class="lateral-rodape opcoes">
+        <summary>Sobre este protótipo</summary>
+        <p>Os dados ficam guardados só neste navegador. Use apenas dados fictícios: não coloque nomes reais de pessoas acolhidas.</p>
+        <button type="button" class="botao-fantasma" id="restaurar">Restaurar dados de exemplo</button>
+        <!-- Confirmação dentro da página: diálogos confirm() são bloqueados em alguns lugares onde o site fica hospedado. -->
+        <div class="confirmar" id="confirmar-restaurar" hidden>
+          <p>Isso apaga tudo o que foi lançado neste navegador.</p>
+          <div class="confirmar-acoes">
+            <button type="button" class="botao-fantasma" id="restaurar-sim">Apagar e restaurar</button>
+            <button type="button" class="botao-fantasma" id="restaurar-nao">Cancelar</button>
+          </div>
+        </div>
+      </details>
+    </aside>
+
+    <main id="conteudo" tabindex="-1">
+      <header class="topo">
+        <p class="topo-data" id="data-hoje"></p>
+        <h1>Como está a casa hoje</h1>
+      </header>
+
+      <section id="resumo" class="resumo" aria-label="Resumo do dia">
+        <div class="indicador">
+          <p class="indicador-titulo">Saldo em caixa</p>
+          <p class="indicador-valor" id="kpi-saldo"></p>
+          <p class="indicador-nota" id="kpi-saldo-nota"></p>
+        </div>
+        <div class="indicador" id="kpi-minimo-bloco">
+          <p class="indicador-titulo">Precisam de reposição</p>
+          <p class="indicador-valor" id="kpi-minimo"></p>
+          <p class="indicador-nota" id="kpi-minimo-nota"></p>
+        </div>
+        <div class="indicador" id="kpi-validade-bloco">
+          <p class="indicador-titulo">Vencem em até 15 dias</p>
+          <p class="indicador-valor" id="kpi-validade"></p>
+          <p class="indicador-nota" id="kpi-validade-nota"></p>
+        </div>
+        <div class="indicador">
+          <p class="indicador-titulo">Doações neste mês</p>
+          <p class="indicador-valor" id="kpi-doacoes"></p>
+          <p class="indicador-nota" id="kpi-doacoes-nota"></p>
+        </div>
+      </section>
+
+      <div class="grade">
+        <section id="despensa" class="painel" aria-labelledby="titulo-despensa">
+          <div class="painel-cabeca">
+            <h2 id="titulo-despensa">Despensa e almoxarifado</h2>
+            <p class="painel-ajuda">O tracinho em cada barra mostra o mínimo que a casa precisa ter. Barra antes do tracinho: hora de pedir doação.</p>
+          </div>
+
+          <div class="filtros">
+            <label class="campo-busca">
+              <span class="visualmente-oculto">Buscar item</span>
+              <input type="search" id="busca" placeholder="Buscar item" autocomplete="off">
+            </label>
+            <fieldset class="chips">
+              <legend class="visualmente-oculto">Filtrar por categoria</legend>
+              <label><input type="radio" name="categoria" value="" checked><span>Todos</span></label>
+              <label><input type="radio" name="categoria" value="Alimentos"><span>Alimentos</span></label>
+              <label><input type="radio" name="categoria" value="Higiene"><span>Higiene</span></label>
+              <label><input type="radio" name="categoria" value="Limpeza"><span>Limpeza</span></label>
+            </fieldset>
+          </div>
+
+          <ul class="prateleira" id="lista-itens"></ul>
+          <p class="vazio" id="lista-vazia" hidden>Nenhum item encontrado. Tente outro nome ou cadastre o item ao registrar uma doação.</p>
+        </section>
+
+        <section id="registrar" class="painel painel-registro" aria-labelledby="titulo-registro">
+          <h2 id="titulo-registro">Registrar movimentação</h2>
+
+          <form id="form-registro" novalidate>
+            <fieldset class="tipos">
+              <legend>O que aconteceu?</legend>
+              <label><input type="radio" name="tipo" value="doacao_item" checked><span>Chegou doação de itens</span></label>
+              <label><input type="radio" name="tipo" value="saida_item"><span>Saíram itens do estoque</span></label>
+              <label><input type="radio" name="tipo" value="entrada_dinheiro"><span>Entrou dinheiro</span></label>
+              <label><input type="radio" name="tipo" value="saida_dinheiro"><span>Pagamos uma despesa</span></label>
+            </fieldset>
+
+            <div class="campo" data-tipos="doacao_item saida_item">
+              <label for="f-item">Item</label>
+              <select id="f-item" name="itemId"></select>
+            </div>
+
+            <div class="novo-item" id="novo-item" data-tipos="doacao_item" hidden>
+              <div class="campo">
+                <label for="f-novo-nome">Nome do item novo</label>
+                <input id="f-novo-nome" name="novoNome" maxlength="60" autocomplete="off">
+              </div>
+              <div class="linha">
+                <div class="campo">
+                  <label for="f-novo-categoria">Categoria</label>
+                  <select id="f-novo-categoria" name="novoCategoria">
+                    <option>Alimentos</option>
+                    <option>Higiene</option>
+                    <option>Limpeza</option>
+                  </select>
+                </div>
+                <div class="campo">
+                  <label for="f-novo-unidade">Unidade</label>
+                  <input id="f-novo-unidade" name="novoUnidade" maxlength="10" placeholder="kg, L, un" list="unidades">
+                  <datalist id="unidades"><option value="kg"><option value="L"><option value="un"><option value="pct"><option value="cx"></datalist>
+                </div>
+                <div class="campo">
+                  <label for="f-novo-minimo">Estoque mínimo</label>
+                  <input id="f-novo-minimo" name="novoMinimo" inputmode="decimal" value="0">
+                </div>
+              </div>
+            </div>
+
+            <div class="linha" data-tipos="doacao_item saida_item">
+              <div class="campo">
+                <label for="f-quantidade">Quantidade <span class="unidade" id="f-unidade"></span></label>
+                <input id="f-quantidade" name="quantidade" inputmode="decimal" autocomplete="off">
+              </div>
+              <div class="campo" data-tipos="doacao_item">
+                <label for="f-validade">Validade <span class="opcional">(se tiver)</span></label>
+                <input id="f-validade" name="validade" type="date">
+              </div>
+            </div>
+
+            <div class="campo" data-tipos="entrada_dinheiro saida_dinheiro">
+              <label for="f-valor">Valor em reais</label>
+              <div class="com-prefixo">
+                <span aria-hidden="true">R$</span>
+                <input id="f-valor" name="valor" inputmode="decimal" placeholder="0,00" autocomplete="off">
+              </div>
+            </div>
+
+            <div class="campo">
+              <label for="f-pessoa" id="r-pessoa">Quem doou?</label>
+              <input id="f-pessoa" name="pessoa" maxlength="80" autocomplete="off">
+            </div>
+
+            <div class="campo">
+              <label for="f-descricao" id="r-descricao">Observação</label>
+              <input id="f-descricao" name="descricao" maxlength="120" autocomplete="off">
+            </div>
+
+            <div class="campo">
+              <label for="f-data">Data</label>
+              <input id="f-data" name="data" type="date" required>
+            </div>
+
+            <p class="erro" id="erro-form" role="alert"></p>
+            <button type="submit" class="botao" id="f-enviar">Registrar doação</button>
+          </form>
+        </section>
+      </div>
+
+      <section id="historico" class="painel" aria-labelledby="titulo-historico">
+        <div class="painel-cabeca painel-cabeca-linha">
+          <h2 id="titulo-historico">Histórico de movimentações</h2>
+          <label class="filtro-historico">
+            <span>Mostrar</span>
+            <select id="filtro-historico">
+              <option value="">Tudo</option>
+              <option value="estoque">Só estoque</option>
+              <option value="financeiro">Só dinheiro</option>
+            </select>
+          </label>
+        </div>
+        <p class="painel-ajuda historico-limite" id="historico-limite" hidden></p>
+        <div class="tabela-rolagem" tabindex="0" role="region" aria-labelledby="titulo-historico">
+          <table class="tabela">
+            <thead>
+              <tr>
+                <th scope="col">Data</th>
+                <th scope="col">Movimento</th>
+                <th scope="col">Detalhe</th>
+                <th scope="col">Quem</th>
+                <th scope="col" class="num">Quantidade ou valor</th>
+              </tr>
+            </thead>
+            <tbody id="corpo-historico"></tbody>
+          </table>
+        </div>
+        <p class="vazio" id="historico-vazio" hidden>Nada registrado ainda. Use o formulário acima para lançar a primeira movimentação.</p>
+      </section>
+    </main>
+  </div>
+
+  <!-- Fica sempre na página (só some visualmente) para o leitor de tela anunciar as mudanças. -->
+  <div class="aviso" id="aviso" role="status" aria-live="polite">
+    <p id="aviso-texto"></p>
+    <div class="aviso-acoes">
+      <button type="button" class="botao-fantasma" id="aviso-desfazer" hidden>Desfazer</button>
+      <button type="button" class="botao-fantasma" id="aviso-fechar" hidden>Fechar</button>
+    </div>
+  </div>
+
+  <script src="js/store.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
