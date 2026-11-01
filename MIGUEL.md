@@ -127,6 +127,8 @@ O repositório é [jonaass/casa-via-matris](https://github.com/jonaass/casa-via-
 
 ## Teste no celular do responsável (checklist)
 
+Android: instale **sempre pelo Chrome**. O navegador da Samsung gera um pacote próprio, e o Play Protect pode bloqueá-lo com o aviso "App de risco bloqueado". Isso não vem do código do site, e o site mostra uma faixa com o botão "Abrir no Chrome".
+
 Android (Chrome):
 - [ ] Abrir o endereço do GitHub Pages e tocar em **⋮ → Instalar app**.
 - [ ] O ícone da casinha dourada aparece, e o app abre sem a barra do navegador.

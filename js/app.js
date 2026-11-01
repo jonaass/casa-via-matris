@@ -459,10 +459,18 @@
   document.documentElement.lang = 'pt-BR';
   $('versao').textContent = VERSAO;
   atualizarData();
+
+  // O navegador da Samsung gera o próprio pacote do app, e o Play Protect do Android bloqueia
+  // esse pacote como "versão antiga". O site não controla isso; pelo Chrome a instalação passa.
+  const noNavegadorSamsung = /Android.*SamsungBrowser/.test(navigator.userAgent);
+  $('faixa-samsung').hidden = !noNavegadorSamsung || matchMedia('(display-mode: standalone)').matches;
+  $('abrir-chrome').href = `intent://${location.host}${location.pathname}#Intent;scheme=https;package=com.android.chrome;` +
+    `S.browser_fallback_url=${encodeURIComponent(location.href)};end`;
+
   // No celular o app volta do segundo plano sem recarregar, às vezes dias depois.
   document.addEventListener('visibilitychange', () => { if (!document.hidden) atualizarData(); });
 
   pedirArmazenamentoPersistente();
   // Abre sem internet. Falha em silêncio onde service worker não é permitido (arquivo local).
-  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).catch(() => {});
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).catch(() => { });
 })();

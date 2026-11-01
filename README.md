@@ -122,6 +122,7 @@ Encontrados na revisão do protótipo. Os marcados como corrigidos têm teste em
 - **Backup manual**: se o aparelho quebrar, só existe o que foi baixado. O app não tem como confirmar
   que o arquivo chegou à pasta Downloads, então a pessoa precisa conferir.
 - **Importação não aplica as regras**: ela restaura registros, sem mexer no estoque nem conferir saldo.
+- **Instalação no Android**: pelo navegador da Samsung, o Play Protect pode bloquear o app. A causa é o pacote gerado por esse navegador, não o site. Instale pelo Chrome; o app mostra uma faixa orientando isso.
 - **VERSAO**: publicar sem mudar a `VERSAO` no `js/dados.js` deixa os celulares na versão antiga.
 - As fontes vêm do Google Fonts, que recebe o IP de cada visitante. Para produção,
   baixe as fontes e sirva junto com o site.

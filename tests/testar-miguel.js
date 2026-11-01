@@ -26,7 +26,7 @@ require(path.join(js, 'backup.js'));
 // Para baixarPlanilha no Node: um link de download de mentira que guarda o arquivo.
 let ultimoArquivo = null;
 URL.createObjectURL = (blob) => { ultimoArquivo = blob; return 'blob:teste'; };
-const documentoFalso = { createElement: () => ({ click() {}, remove() {} }), body: { append() {} } };
+const documentoFalso = { createElement: () => ({ click() { }, remove() { } }), body: { append() { } } };
 globalThis.document = documentoFalso;
 
 let passou = 0;
@@ -140,8 +140,10 @@ teste('migra uma vez os dados do protótipo (store.js) e não apaga o original',
 teste('não migra por cima de dados que já existem', () => {
   salvarRegistro('dinheiro', { codigo: 'novo', valorCentavos: 1 });
   guardado.delete('via-matris:config');
-  localStorage.setItem('via-matris:dados:v1', JSON.stringify({ versao: 1, itens: [], movimentos: [
-    { id: 'velho', tipo: 'entrada_dinheiro', data: '2026-10-02', valorCentavos: 5 }] }));
+  localStorage.setItem('via-matris:dados:v1', JSON.stringify({
+    versao: 1, itens: [], movimentos: [
+      { id: 'velho', tipo: 'entrada_dinheiro', data: '2026-10-02', valorCentavos: 5 }]
+  }));
   assert.deepStrictEqual(lerTudo('dinheiro').map((m) => m.codigo), ['novo']);
 });
 
@@ -254,7 +256,7 @@ teste('baixarPlanilha entrega o arquivo com BOM e anota a data; baixarTodas faz 
 });
 teste('download que falha não conta como backup', async () => {
   const erroConsole = console.error;
-  console.error = () => {};
+  console.error = () => { };
   globalThis.document = { createElement: () => { throw new Error('bloqueado'); } };
   const r = await baixarPlanilha('dinheiro');
   globalThis.document = documentoFalso;
@@ -331,9 +333,11 @@ teste('sem espaço, a planilha não entra pela metade e o resultado diz isso', (
   assert.deepStrictEqual(lerTudo('dinheiro'), []);
 });
 teste('migração sem espaço não fica pela metade e tenta de novo depois', () => {
-  localStorage.setItem('via-matris:dados:v1', JSON.stringify({ versao: 1,
+  localStorage.setItem('via-matris:dados:v1', JSON.stringify({
+    versao: 1,
     itens: [{ id: 'arroz', nome: 'Arroz' }],
-    movimentos: [{ id: 'm', tipo: 'entrada_dinheiro', data: '2026-10-02', valorCentavos: 5 }] }));
+    movimentos: [{ id: 'm', tipo: 'entrada_dinheiro', data: '2026-10-02', valorCentavos: 5 }]
+  }));
   const original = localStorage.setItem;
   localStorage.setItem = (k, v) => { if (k === 'via-matris:dinheiro') throw new Error('QuotaExceededError'); original(k, v); };
   assert.deepStrictEqual(lerTudo('dinheiro'), []);

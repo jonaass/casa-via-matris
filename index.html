@@ -1,15 +1,19 @@
 <!doctype html>
 <html lang="pt-BR">
+
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Casa Via Matris | Gestão de recursos</title>
-  <meta name="description" content="Protótipo do sistema de controle de estoque, doações e finanças da Casa Via Matris.">
+  <meta name="description"
+    content="Protótipo do sistema de controle de estoque, doações e finanças da Casa Via Matris.">
   <!-- CSP: só aceita scripts deste próprio site e fontes do Google. Barra injeção de script de terceiros. -->
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; base-uri 'none'; form-action 'self'">
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; base-uri 'none'; form-action 'self'">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&display=swap">
+  <link rel="stylesheet"
+    href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&display=swap">
   <link rel="stylesheet" href="css/styles.css">
   <!-- Faz o site instalar no celular como um app (o registro do sw.js fica no app.js, porque a CSP bloqueia script inline). -->
   <link rel="manifest" href="manifest.json">
@@ -17,6 +21,7 @@
   <link rel="apple-touch-icon" href="icones/icone-apple-180.png">
   <meta name="theme-color" content="#16443a">
 </head>
+
 <body>
   <a class="pular" href="#conteudo">Pular para o conteúdo</a>
 
@@ -24,8 +29,9 @@
     <aside class="lateral">
       <div class="marca">
         <svg viewBox="0 0 40 40" aria-hidden="true" class="marca-icone">
-          <path d="M6 19 20 7l14 12v14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2Z" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round"/>
-          <path d="M20 30s-6-3.6-6-8a3.2 3.2 0 0 1 6-1.6 3.2 3.2 0 0 1 6 1.6c0 4.4-6 8-6 8Z" fill="currentColor"/>
+          <path d="M6 19 20 7l14 12v14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2Z" fill="none" stroke="currentColor"
+            stroke-width="2.5" stroke-linejoin="round" />
+          <path d="M20 30s-6-3.6-6-8a3.2 3.2 0 0 1 6-1.6 3.2 3.2 0 0 1 6 1.6c0 4.4-6 8-6 8Z" fill="currentColor" />
         </svg>
         <div>
           <strong>Casa Via Matris</strong>
@@ -71,6 +77,12 @@
         <p>Estes são dados de exemplo. Para usar de verdade, apague-os e cadastre os itens da casa.</p>
         <button type="button" class="botao-fantasma" id="faixa-comecar-zero">Começar do zero</button>
       </div>
+      <div class="faixa" id="faixa-samsung" hidden>
+        <p>Para instalar no celular, use o Chrome: neste navegador o Android pode bloquear a instalação. O que foi
+          lançado aqui não passa sozinho para lá; antes de trocar, baixe as planilhas.</p>
+        <a class="botao-fantasma" id="abrir-chrome" href="https://jonaass.github.io/casa-via-matris/">Abrir no
+          Chrome</a>
+      </div>
       <div class="faixa" id="faixa-backup" hidden>
         <p id="faixa-backup-texto"></p>
         <button type="button" class="botao-fantasma" id="faixa-backup-baixar">Baixar planilhas</button>
@@ -103,7 +115,8 @@
         <section id="despensa" class="painel" aria-labelledby="titulo-despensa">
           <div class="painel-cabeca">
             <h2 id="titulo-despensa">Despensa e almoxarifado</h2>
-            <p class="painel-ajuda">O tracinho em cada barra mostra o mínimo que a casa precisa ter. Barra antes do tracinho: hora de pedir doação.</p>
+            <p class="painel-ajuda">O tracinho em cada barra mostra o mínimo que a casa precisa ter. Barra antes do
+              tracinho: hora de pedir doação.</p>
           </div>
 
           <div class="filtros">
@@ -121,7 +134,8 @@
           </div>
 
           <ul class="prateleira" id="lista-itens"></ul>
-          <p class="vazio" id="lista-vazia" hidden>Nenhum item encontrado. Tente outro nome ou cadastre o item ao registrar uma doação.</p>
+          <p class="vazio" id="lista-vazia" hidden>Nenhum item encontrado. Tente outro nome ou cadastre o item ao
+            registrar uma doação.</p>
         </section>
 
         <section id="registrar" class="painel painel-registro" aria-labelledby="titulo-registro">
@@ -130,7 +144,8 @@
           <form id="form-registro" novalidate>
             <fieldset class="tipos">
               <legend>O que aconteceu?</legend>
-              <label><input type="radio" name="tipo" value="doacao_item" checked><span>Chegou doação de itens</span></label>
+              <label><input type="radio" name="tipo" value="doacao_item" checked><span>Chegou doação de
+                  itens</span></label>
               <label><input type="radio" name="tipo" value="saida_item"><span>Saíram itens do estoque</span></label>
               <label><input type="radio" name="tipo" value="entrada_dinheiro"><span>Entrou dinheiro</span></label>
               <label><input type="radio" name="tipo" value="saida_dinheiro"><span>Pagamos uma despesa</span></label>
@@ -158,7 +173,13 @@
                 <div class="campo">
                   <label for="f-novo-unidade">Unidade</label>
                   <input id="f-novo-unidade" name="novoUnidade" maxlength="10" placeholder="kg, L, un" list="unidades">
-                  <datalist id="unidades"><option value="kg"><option value="L"><option value="un"><option value="pct"><option value="cx"></datalist>
+                  <datalist id="unidades">
+                    <option value="kg">
+                    <option value="L">
+                    <option value="un">
+                    <option value="pct">
+                    <option value="cx">
+                  </datalist>
                 </div>
                 <div class="campo">
                   <label for="f-novo-minimo">Estoque mínimo</label>
@@ -235,7 +256,8 @@
             <tbody id="corpo-historico"></tbody>
           </table>
         </div>
-        <p class="vazio" id="historico-vazio" hidden>Nada registrado ainda. Use o formulário acima para lançar a primeira movimentação.</p>
+        <p class="vazio" id="historico-vazio" hidden>Nada registrado ainda. Use o formulário acima para lançar a
+          primeira movimentação.</p>
       </section>
     </main>
   </div>
@@ -256,4 +278,5 @@
   <script src="js/backup.js"></script>
   <script src="js/app.js"></script>
 </body>
+
 </html>
