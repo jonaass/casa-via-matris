@@ -50,7 +50,7 @@ node tests/testar-miguel.js
   "apertados" aparecem primeiro. Dá para buscar pelo nome e filtrar por categoria.
 - **Registrar movimentação**: 4 tipos (doação de itens, saída de itens, entrada de dinheiro,
   despesa). O formulário mostra só os campos daquele tipo. Doações podem cadastrar item novo.
-- **Desfazer**: depois de registrar, o aviso tem um botão "Desfazer" por 20 segundos.
+- **Desfazer**: cada linha do histórico tem um botão "Desfazer", com confirmação. Logo depois de registrar, o aviso também oferece o botão por 20 segundos.
   O tempo pausa enquanto o mouse ou o foco do teclado estão em cima do aviso.
 - **Histórico**: as 50 últimas movimentações, com filtro por estoque ou dinheiro. Quando
   há mais de 50, a tela avisa quantas existem no total.

@@ -269,6 +269,22 @@ test('doação do backup acha o item pelo nome quando o aparelho tem outro códi
   assert.equal(lerTudo('doacoes').find((d) => d.codigo === 'd1').itemId, codigoNovo);
 });
 
+test('começar do zero esquece o backup antigo', () => {
+  const s = criarStore();
+  salvarConfig({ ultimoBackup: { itens: dataDeHoje(), doacoes: dataDeHoje(), dinheiro: dataDeHoje() } });
+  s.apagarTudo();
+  assert.equal(diasDesdeUltimoBackup(), null);
+});
+
+test('lançamento antigo pode ser desfeito, mesmo com outros depois dele', () => {
+  const s = criarStore();
+  const saldo = s.resumo().saldoCentavos;
+  const errado = s.registrar({ tipo: 'entrada_dinheiro', valor: '1000,00', descricao: 'Digitei errado' });
+  s.registrar({ tipo: 'entrada_dinheiro', valor: '10,00', descricao: 'Outro' });
+  assert.ok(s.estornar(errado.movimento.codigo).ok);
+  assert.equal(s.resumo().saldoCentavos, saldo + 1000);
+});
+
 test('exemplos só aparecem na primeira abertura; apagar tudo é definitivo', () => {
   const s = criarStore();
   assert.ok(s.itens().length > 0);

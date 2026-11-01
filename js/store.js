@@ -353,7 +353,12 @@
       estornar,
       resumo,
       restaurarExemplo: () => gravarColecoes(dadosDeExemplo()),
-      apagarTudo: () => gravarColecoes({ itens: [], doacoes: [], dinheiro: [] }),
+      apagarTudo: () => {
+        const erro = gravarColecoes({ itens: [], doacoes: [], dinheiro: [] });
+        // O backup antigo não tem o que for lançado daqui em diante: o aviso precisa voltar a contar.
+        if (!erro) salvarConfig({ ultimoBackup: {} });
+        return erro;
+      },
       // Ainda há exemplos na tela? E só exemplos, sem nada lançado por alguém?
       temExemplos: () => movimentos().some(ehExemplo),
       soExemplos: () => { const m = movimentos(); return m.length > 0 && m.every(ehExemplo); },

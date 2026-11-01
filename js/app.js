@@ -314,10 +314,36 @@
         el('td', {}, el('span', { class: `etiqueta ${m.tipo}` }, tipo.rotulo)),
         el('td', {}, detalhe || '—'),
         el('td', {}, m.pessoa || '—'),
-        el('td', { class: `num ${tipo.sinal > 0 ? 'positivo' : 'negativo'}` }, valor));
+        el('td', { class: `num ${tipo.sinal > 0 ? 'positivo' : 'negativo'}` }, valor),
+        el('td', { class: 'acao' }, el('button', {
+          type: 'button',
+          class: 'botao-fantasma',
+          'data-codigo': m.codigo,
+          'aria-label': `${pedindoConfirmacao === m.codigo ? 'Confirmar: desfazer' : 'Desfazer'} ${tipo.rotulo}, ${valor}, ${dataCurta(m.data)}`,
+        }, pedindoConfirmacao === m.codigo ? 'Confirmar' : 'Desfazer')));
     }));
     $('historico-vazio').hidden = movs.length > 0;
   }
+
+  // Dois toques: o primeiro pede confirmação na própria linha, o segundo desfaz.
+  let pedindoConfirmacao = null;
+
+  $('corpo-historico').addEventListener('click', (e) => {
+    const botao = e.target.closest('button[data-codigo]');
+    if (!botao) return;
+    const codigo = botao.dataset.codigo;
+
+    if (pedindoConfirmacao !== codigo) {
+      pedindoConfirmacao = codigo;
+      desenharHistorico();
+      [...$('corpo-historico').querySelectorAll('button[data-codigo]')].find((b) => b.dataset.codigo === codigo).focus();
+      return;
+    }
+    pedindoConfirmacao = null;
+    const r = store.estornar(codigo);
+    atualizarTudo();
+    avisar(r.ok ? 'Movimentação desfeita.' : r.erro);
+  });
 
   // ---------- eventos gerais ----------
 
@@ -408,6 +434,19 @@
   // Duas abas abertas: quando a outra salva, esta redesenha com o que está gravado.
   aoMudarEmOutraAba(() => atualizarTudo());
 
+  let diaMostrado = null;
+
+  function atualizarData() {
+    const hoje = dataDeHoje();
+    if (hoje === diaMostrado) return;
+    // Só acompanha o dia se a pessoa não escolheu outra data à mão.
+    if (!$('f-data').value || $('f-data').value === diaMostrado) $('f-data').value = hoje;
+    diaMostrado = hoje;
+    $('data-hoje').textContent = dataPorExtenso();
+    $('f-data').max = hoje;
+    atualizarTudo();
+  }
+
   function atualizarTudo() {
     desenharResumo();
     desenharDespensa();
@@ -418,11 +457,10 @@
 
   // Garante o idioma certo para leitores de tela também quando a página é hospedada dentro de outra estrutura.
   document.documentElement.lang = 'pt-BR';
-  $('data-hoje').textContent = dataPorExtenso();
-  $('f-data').value = dataDeHoje();
-  $('f-data').max = dataDeHoje();
   $('versao').textContent = VERSAO;
-  atualizarTudo();
+  atualizarData();
+  // No celular o app volta do segundo plano sem recarregar, às vezes dias depois.
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) atualizarData(); });
 
   pedirArmazenamentoPersistente();
   // Abre sem internet. Falha em silêncio onde service worker não é permitido (arquivo local, claude.ai).
