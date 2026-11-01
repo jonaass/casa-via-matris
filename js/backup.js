@@ -14,7 +14,7 @@
  * Para restaurar tudo, importe primeiro o estoque: as doações apontam para os itens dele.
  *
  * Precisa, carregados antes: utilitarios.js, dados.js e store.js
- * (deste usa textoParaCentavos, centavosParaTexto e gerarCodigo).
+ * (deste usa textoParaCentavos, centavosParaTexto, gerarCodigo e QUANTIDADE_MAXIMA).
  */
 (function () {
 'use strict';
@@ -74,7 +74,6 @@ const ORDEM = ['itens', 'doacoes', 'dinheiro'];
 
 const SEPARADOR = ';';
 const BOM = '﻿'; // avisa o Excel que o arquivo é UTF-8; sem ele os acentos viram "Ã§"
-const QUANTIDADE_MAXIMA = 1000000000; // a mesma do store.js
 const TAMANHO_MAXIMO_ARQUIVO = 5 * 1024 * 1024; // o localStorage guarda cerca de 5 MB; maior que isso nem cabe
 
 function colunasDe(colecao) {
@@ -279,17 +278,15 @@ function celulaParaValor(coluna, celula) {
 
 /*
  * Doações apontam para um item do estoque. Acha pelo "Código do item";
- * se a coluna estiver vazia (planilha feita à mão), acha pelo nome do item.
+ * sem ele (planilha feita à mão, ou o aparelho já tem o item com outro código), acha pelo nome.
  */
 function ligarAoItem(registro, nomeNaPlanilha, itens) {
-  if (registro.itemId) {
-    return itens.some((i) => i.codigo === registro.itemId)
-      ? null
-      : `o item de código "${registro.itemId}" não está no estoque. Importe antes a planilha de estoque`;
-  }
+  if (registro.itemId && itens.some((i) => i.codigo === registro.itemId)) return null;
+
   const nome = simplificar(nomeNaPlanilha);
   const achado = nome && itens.find((i) => simplificar(i.nome) === nome);
   if (!achado) {
+    if (registro.itemId) return `o item de código "${registro.itemId}" não está no estoque. Importe antes a planilha de estoque`;
     return nomeNaPlanilha
       ? `o item "${nomeNaPlanilha.trim()}" não está no estoque. Importe antes a planilha de estoque`
       : 'Falta preencher Código do item ou Item';
@@ -463,7 +460,6 @@ function diasDesdeUltimoBackup(colecao) {
 
 // Só estes nomes ficam visíveis para os outros arquivos.
 Object.assign(globalThis, {
-  gerarPlanilha, baixarPlanilha, baixarTodasAsPlanilhas, importarPlanilha, lerArquivo, descobrirColecao,
-  restaurarArquivos, diasDesdeUltimoBackup,
+  gerarPlanilha, baixarPlanilha, baixarTodasAsPlanilhas, importarPlanilha, restaurarArquivos, diasDesdeUltimoBackup,
 });
 })();

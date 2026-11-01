@@ -360,8 +360,8 @@
     };
   }
 
-  // gerarCodigo e as conversões de dinheiro são usadas também pelo backup.js.
-  Object.assign(raiz, { gerarCodigo, textoParaCentavos, centavosParaTexto });
+  // Usados também pelo backup.js.
+  Object.assign(raiz, { gerarCodigo, textoParaCentavos, centavosParaTexto, QUANTIDADE_MAXIMA });
 
   const api = { criarStore, TIPOS, CATEGORIAS, DIAS_ALERTA_VALIDADE, quantidadeDeTexto };
   raiz.ViaMatris = api;

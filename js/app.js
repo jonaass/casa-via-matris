@@ -375,8 +375,8 @@
 
     const temExemplos = store.temExemplos();
     $('faixa-exemplo').hidden = !temExemplos;
-    // Exemplos não precisam de backup; dados reais sim, e são a única cópia.
-    const atrasado = !temExemplos && store.movimentos().length > 0 && (dias === null || dias > DIAS_ENTRE_BACKUPS);
+    // Exemplos não precisam de backup; dados reais sim, mesmo misturados a eles, e são a única cópia.
+    const atrasado = !store.soExemplos() && store.movimentos().length > 0 && (dias === null || dias > DIAS_ENTRE_BACKUPS);
     $('faixa-backup').hidden = !atrasado;
     $('faixa-backup-texto').textContent = `${quando} Os dados só existem neste aparelho: baixe as planilhas e guarde fora dele.`;
   }

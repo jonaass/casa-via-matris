@@ -26,16 +26,12 @@
 'use strict';
 
 /** Versão do app. Mude a cada publicação: o sw.js usa ela para baixar os arquivos novos. */
-const VERSAO = '1.0.0';
+const VERSAO = '1.0.1';
 
 const COLECOES = ['dinheiro', 'doacoes', 'itens'];
 const PREFIXO = 'via-matris:';
 // Onde o protótipo (store.js) guardava tudo junto. Só é lido, nunca apagado.
 const CHAVE_PROTOTIPO = 'via-matris:dados:v1';
-
-// Se o navegador bloquear o armazenamento (aba anônima, por exemplo),
-// os dados ficam só na memória e as gravações avisam com erro.
-const memoriaReserva = {};
 
 function armazenamento() {
   try {
@@ -57,33 +53,29 @@ function conferirColecao(colecao) {
 
 function lerChave(chave, padrao) {
   const s = armazenamento();
-  const bruto = s ? s.getItem(PREFIXO + chave) : memoriaReserva[chave];
+  const bruto = s ? s.getItem(PREFIXO + chave) : null;
   if (bruto == null) return padrao;
   try {
     return JSON.parse(bruto);
   } catch (e) {
     // Guarda o texto estragado à parte, para a próxima gravação não apagar de vez.
     console.warn(`Dados de "${chave}" ilegíveis. Uma cópia ficou em ${PREFIXO}${chave}:corrompido.`, e);
-    if (s) {
-      // Só tira da chave principal se a cópia foi guardada; com o armazenamento cheio, setItem falha.
-      try {
-        s.setItem(`${PREFIXO}${chave}:corrompido`, bruto);
-        s.removeItem(PREFIXO + chave);
-      } catch (erro) {
-        console.warn('Sem espaço para guardar a cópia; os dados ficaram onde estavam.', erro);
-      }
+    // Só tira da chave principal se a cópia foi guardada; com o armazenamento cheio, setItem falha.
+    try {
+      s.setItem(`${PREFIXO}${chave}:corrompido`, bruto);
+      s.removeItem(PREFIXO + chave);
+    } catch (erro) {
+      console.warn('Sem espaço para guardar a cópia; os dados ficaram onde estavam.', erro);
     }
     return padrao;
   }
 }
 
+// Regra de quem chama: gravação que falhou não mudou nada.
 function gravarChave(chave, valor) {
   const texto = JSON.stringify(valor);
   const s = armazenamento();
-  if (!s) {
-    memoriaReserva[chave] = texto;
-    return falha('O celular não deixou guardar os dados. Saia da aba anônima ou libere o armazenamento do site.');
-  }
+  if (!s) return falha('O celular não deixou guardar os dados. Saia da aba anônima ou libere o armazenamento do site.');
   try {
     s.setItem(PREFIXO + chave, texto);
     return { ok: true };

@@ -197,14 +197,21 @@ test('armazenamento cheio: o lançamento é recusado e nada fica pela metade', (
   assert.equal(lerTudo('doacoes').length, doacoesAntes);
 });
 
-test('sem armazenamento, o lançamento é recusado com explicação', () => {
-  const s = criarStore();
+test('sem armazenamento, o lançamento é recusado e não conta em lugar nenhum', () => {
   const original = globalThis.localStorage;
   Object.defineProperty(globalThis, 'localStorage', { value: null, configurable: true, writable: true });
+  const s = criarStore();
   const r = s.registrar({ tipo: 'entrada_dinheiro', valor: '10', descricao: 'Teste' });
+  s.registrar({ tipo: 'entrada_dinheiro', valor: '10', descricao: 'Teste' });
+  const novoItem = s.registrar({ tipo: 'doacao_item', quantidade: 5, novoItem: { nome: 'Farinha', unidade: 'kg', categoria: 'Alimentos', minimo: 0 } });
+  const saldo = s.resumo().saldoCentavos;
+  const movimentos = s.movimentos().length;
   globalThis.localStorage = original;
   assert.equal(r.ok, false);
   assert.match(r.erro, /guardar/);
+  assert.equal(novoItem.ok, false);
+  assert.equal(saldo, 0);
+  assert.equal(movimentos, 0);
 });
 
 // ---------- integração com o backup do Miguel ----------
@@ -244,6 +251,22 @@ test('restaurar por cima dos exemplos não mantém os números de exemplo', asyn
   await restaurarArquivos([arquivo], () => { if (s.soExemplos()) s.apagarTudo(); });
   assert.equal(s.item('arroz').quantidade, 3);
   assert.equal(s.itens().length, 1);
+});
+
+test('doação do backup acha o item pelo nome quando o aparelho tem outro código', () => {
+  const s = criarStore();
+  s.apagarTudo();
+  salvarRegistro('itens', { codigo: 'codigo-velho', nome: 'Arroz', categoria: 'Alimentos', unidade: 'kg', quantidade: 5, minimo: 0, validade: null });
+  salvarRegistro('doacoes', { codigo: 'd1', tipo: 'doacao_item', data: '2026-10-01', itemId: 'codigo-velho', quantidade: 5, descricao: '', pessoa: 'X', criadoEm: '1' });
+  const planilhas = { itens: gerarPlanilha('itens'), doacoes: gerarPlanilha('doacoes') };
+  s.apagarTudo();
+  s.registrar({ tipo: 'doacao_item', quantidade: 1, novoItem: { nome: 'Arroz', unidade: 'kg', categoria: 'Alimentos', minimo: 0 } });
+  const codigoNovo = s.itens()[0].codigo;
+
+  assert.equal(importarPlanilha('itens', planilhas.itens).ignorados, 1);
+  const r = importarPlanilha('doacoes', planilhas.doacoes);
+  assert.deepEqual([r.importados, r.erros], [1, []]);
+  assert.equal(lerTudo('doacoes').find((d) => d.codigo === 'd1').itemId, codigoNovo);
 });
 
 test('exemplos só aparecem na primeira abertura; apagar tudo é definitivo', () => {

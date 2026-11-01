@@ -53,7 +53,7 @@ O `dados.js` não confere esses campos: validar é trabalho das Regras. Ele só 
 
 **Migração do protótipo.** Na primeira leitura, se existirem dados do protótipo (chave `via-matris:dados:v1`) e as coleções novas estiverem vazias, eles são copiados para as três coleções, uma vez só. Ou entram as três, ou nenhuma: se faltar espaço, tenta de novo na próxima abertura. A chave antiga continua intacta.
 
-**Proteções.** Se os dados guardados estragarem, o app abre vazio em vez de travar, e o texto estragado fica em `via-matris:<colecao>:corrompido`. Com o armazenamento cheio ou bloqueado, a gravação devolve um erro em português, em vez de perder o dado sem avisar.
+**Proteções.** Se os dados guardados estragarem, o app abre vazio em vez de travar, e o texto estragado fica em `via-matris:<colecao>:corrompido`. Com o armazenamento cheio ou bloqueado, a gravação devolve um erro em português e nada muda: gravação que falhou não tem efeito.
 
 ### `js/backup.js` (quem chama: Jonas)
 
