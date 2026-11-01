@@ -143,19 +143,9 @@ function gerarPlanilha(colecao) {
 }
 
 /*
- * Entrega o arquivo para a pessoa salvar.
- * Publicado como Artifact no claude.ai, o navegador bloqueia downloads diretos: aí usamos
- * o "downloads" do claude.ai, que pergunta à pessoa se quer salvar. No GitHub Pages
- * (o app de verdade) window.claude não existe e o download é o normal do navegador.
+ * Entrega o arquivo para a pessoa salvar, com o download normal do navegador.
  */
 async function entregarArquivo(nomeDoArquivo, texto) {
-  if (globalThis.claude && typeof globalThis.claude.use === 'function') {
-    const downloads = await globalThis.claude.use('downloads');
-    if (downloads) {
-      await downloads.save({ filename: nomeDoArquivo, data: texto });
-      return;
-    }
-  }
   const arquivo = new Blob([texto], { type: 'text/csv;charset=utf-8' });
   const endereco = URL.createObjectURL(arquivo);
   const link = document.createElement('a');
@@ -178,7 +168,6 @@ async function baixarPlanilha(colecao) {
   try {
     await entregarArquivo(nomeDoArquivo, BOM + gerarPlanilha(colecao));
   } catch (e) {
-    if (e && e.code === 'declined') return { ok: false, erros: ['O download foi cancelado.'] };
     console.error(e);
     return { ok: false, erros: [`Não foi possível baixar a planilha de ${NOMES_LEGIVEIS[colecao]}. Tente de novo.`] };
   }

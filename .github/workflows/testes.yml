@@ -1,0 +1,31 @@
+# Roda os testes a cada envio. O resultado aparece na aba Actions do GitHub.
+name: Testes
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  testes:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: node --test tests/store.test.js
+      - run: node tests/testar-miguel.js
+
+      # Sem mudar a VERSAO, os celulares continuam com os arquivos antigos.
+      - name: Confere a VERSAO
+        if: github.event_name == 'push' && !startsWith(github.event.before, '0000000')
+        env:
+          ANTES: ${{ github.event.before }}
+        run: |
+          if git diff --name-only "$ANTES" HEAD | grep -qE '^(index\.html|manifest\.json|sw\.js|css/|js/|icones/)' \
+            && ! git diff "$ANTES" HEAD -- js/dados.js | grep -q '^[-+]const VERSAO'; then
+            echo "::error::O app mudou, mas a VERSAO em js/dados.js não. Mude a VERSAO para os celulares atualizarem."
+            exit 1
+          fi

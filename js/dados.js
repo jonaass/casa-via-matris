@@ -1,8 +1,8 @@
 /*
  * dados.js — Miguel
  *
- * A ÚNICA parte do app que lê e grava no celular. Só as Regras (Antônio) e o
- * backup.js chamam estas funções. A tela (app.js do Jonas) nunca chama o dados.js direto.
+ * A ÚNICA parte do app que lê e grava no celular. Quem lê e grava por aqui são o store.js
+ * e o backup.js. A tela (app.js) só usa aoMudarEmOutraAba, pedirArmazenamentoPersistente e VERSAO.
  *
  * Coleções, uma chave do localStorage para cada (os campos são os do front do Jonas):
  *   dinheiro → entradas e despesas
@@ -26,7 +26,7 @@
 'use strict';
 
 /** Versão do app. Mude a cada publicação: o sw.js usa ela para baixar os arquivos novos. */
-const VERSAO = '1.0.2';
+const VERSAO = '1.0.3';
 
 const COLECOES = ['dinheiro', 'doacoes', 'itens'];
 const PREFIXO = 'via-matris:';
@@ -81,7 +81,7 @@ function gravarChave(chave, valor) {
     return { ok: true };
   } catch (e) {
     console.warn('Não foi possível gravar.', e);
-    return falha('Não há espaço para guardar mais dados. Faça um backup e apague registros antigos.');
+    return falha('Não há espaço para guardar mais dados. Baixe as planilhas e peça ajuda a quem cuida do sistema.');
   }
 }
 

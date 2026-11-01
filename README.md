@@ -5,19 +5,9 @@ da Casa Via Matris. Funciona no navegador, instala no celular como um app e abre
 
 ## Versão no ar
 
-- GitHub Pages: https://jonaass.github.io/casa-via-matris/ (atualiza sozinho a cada `git push` na branch `main`)
-- Artifact do Claude: https://claude.ai/artifact/F35rATqA4U4auPk9hcAL25
+https://jonaass.github.io/casa-via-matris/ (atualiza sozinho a cada `git push` na branch `main`)
 
 Cada pessoa que abre vê os próprios dados de exemplo; o que uma registra não aparece para as outras.
-
-Para atualizar o site depois de mudar o código, gere a versão de publicação:
-
-```bash
-node ferramentas/publicar.js
-```
-
-Isso recria a pasta `publicar/` (não edite nada lá dentro; ela é gerada). Depois peça ao
-Claude para publicar `publicar/index.html` no link acima.
 
 ## Como abrir
 
@@ -41,6 +31,9 @@ node --test tests/store.test.js
 ```bash
 node tests/testar-miguel.js
 ```
+
+Os testes também rodam sozinhos a cada envio, na aba Actions do GitHub. O site é publicado
+mesmo se eles falharem: confira a aba depois de enviar.
 
 ## O que já funciona
 
@@ -72,7 +65,7 @@ js/app.js           a tela: desenha a página e responde aos cliques
 sw.js               guarda os arquivos para abrir sem internet
 manifest.json       nome e ícones do app instalado
 tests/              testes automáticos
-ferramentas/        publicar no Artifact; gerar ícones e planilhas de teste
+ferramentas/        gerar ícones e planilhas de teste
 MIGUEL.md           contrato detalhado de dados.js, backup.js e utilitarios.js
 ```
 

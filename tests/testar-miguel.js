@@ -23,9 +23,11 @@ require(path.join(js, 'dados.js'));
 require(path.join(js, 'store.js')); // textoParaCentavos, centavosParaTexto e gerarCodigo
 require(path.join(js, 'backup.js'));
 
-// Para baixarPlanilha no Node: um "claude.use('downloads')" de mentira que guarda o arquivo.
+// Para baixarPlanilha no Node: um link de download de mentira que guarda o arquivo.
 let ultimoArquivo = null;
-globalThis.claude = { use: async () => ({ save: async (a) => { ultimoArquivo = a; return { status: 'saved' }; } }) };
+URL.createObjectURL = (blob) => { ultimoArquivo = blob; return 'blob:teste'; };
+const documentoFalso = { createElement: () => ({ click() {}, remove() {} }), body: { append() {} } };
+globalThis.document = documentoFalso;
 
 let passou = 0;
 const fila = [];
@@ -243,19 +245,21 @@ teste('baixarPlanilha entrega o arquivo com BOM e anota a data; baixarTodas faz 
   exemplo();
   const r = await baixarPlanilha('itens');
   assert.deepStrictEqual(r, { ok: true, nomeDoArquivo: `via-matris-estoque-${dataDeHoje()}.csv` });
-  assert.strictEqual(ultimoArquivo.data.charCodeAt(0), 0xFEFF);
+  assert.deepStrictEqual([...new Uint8Array(await ultimoArquivo.arrayBuffer())].slice(0, 3), [0xEF, 0xBB, 0xBF]);
   assert.strictEqual(diasDesdeUltimoBackup('itens'), 0);
   assert.strictEqual(diasDesdeUltimoBackup(), null, 'as outras duas ainda não');
   const todas = await baixarTodasAsPlanilhas();
   assert.deepStrictEqual(todas.arquivos.map((a) => a.split('-')[2]), ['estoque', 'doacoes', 'dinheiro']);
   assert.strictEqual(diasDesdeUltimoBackup(), 0);
 });
-teste('download recusado pela pessoa não conta como backup', async () => {
-  const salvar = globalThis.claude;
-  globalThis.claude = { use: async () => ({ save: async () => { throw { code: 'declined' }; } }) };
+teste('download que falha não conta como backup', async () => {
+  const erroConsole = console.error;
+  console.error = () => {};
+  globalThis.document = { createElement: () => { throw new Error('bloqueado'); } };
   const r = await baixarPlanilha('dinheiro');
-  globalThis.claude = salvar;
-  assert.deepStrictEqual(r, { ok: false, erros: ['O download foi cancelado.'] });
+  globalThis.document = documentoFalso;
+  console.error = erroConsole;
+  assert.strictEqual(r.ok, false);
   assert.strictEqual(diasDesdeUltimoBackup('dinheiro'), null);
 });
 teste('diasDesdeUltimoBackup pega a planilha mais atrasada', () => {
@@ -372,4 +376,5 @@ teste('todo arquivo que o sw.js e o manifest pedem existe de verdade', () => {
     }
   }
   console.log(`\n${passou} de ${fila.length} testes passaram.`);
+  process.exit(); // sem esperar o temporizador de 60 s que libera o arquivo baixado
 })();

@@ -1,7 +1,7 @@
 /*
  * utilitarios.js — Miguel
  *
- * Funções pequenas de data e de texto, usadas pelas Telas (Jonas) e pelas Regras (Antônio).
+ * Funções pequenas de data e de texto, usadas pela tela (app.js) e pelas regras (store.js).
  * Nenhuma delas lê ou grava dados: só recebem um valor e devolvem outro.
  * Várias substituem o que o app.js do protótipo fazia por conta própria
  * (dataLonga, dataCurta, diasAte, quantidadeTexto, rotuloMes).

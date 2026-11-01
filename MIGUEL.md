@@ -22,13 +22,13 @@ Cada arquivo deixa visíveis só as funções do contrato abaixo. O resto fica e
 | Campo `codigo` | Campo `id` | Continua `codigo`, como combinado no contrato. A migração troca `id` por `codigo`. |
 | Arquivos na raiz | `js/` e `css/styles.css` | `js/dados.js`, `js/backup.js`, `js/utilitarios.js`. O `sw.js` e o `manifest.json` ficam na raiz. |
 
-**Para confirmar na call:** as 3 coleções/planilhas e os nomes de campo abaixo. Se o Antônio mudar algum campo, é só ajustar a constante `COLUNAS` no começo do `js/backup.js`.
+**Para confirmar na call:** as 3 coleções/planilhas e os nomes de campo abaixo. Se o Anthony mudar algum campo, é só ajustar a constante `COLUNAS` no começo do `js/backup.js`.
 
 ---
 
 ## Contrato
 
-### `js/dados.js` (quem chama: Antônio e `backup.js`)
+### `js/dados.js` (quem chama: `store.js` e `backup.js`)
 
 | Função | Devolve |
 |---|---|
@@ -86,9 +86,7 @@ Como funciona a importação:
 - Aceita planilha feita à mão: sem a coluna Código, com `,` no lugar de `;`, e com "doacao" ou "DOAÇÃO" na coluna Movimento. Sem o Código do item, a doação é ligada ao item pelo nome.
 - Um texto que começa com `=`, `+`, `-` ou `@` vai para a planilha com um apóstrofo na frente, para o Excel não executar uma fórmula escondida num nome de doador.
 
-**Downloads dentro do claude.ai.** Publicado como Artifact, o navegador bloqueia downloads diretos. Nesse caso o `backup.js` usa o recurso de downloads do claude.ai, que pergunta à pessoa se quer salvar o arquivo. Para isso funcionar, quem publicar o Artifact precisa declarar a capacidade `downloads`. No GitHub Pages esse recurso não existe, e o download é o normal do navegador.
-
-### `js/utilitarios.js` (quem chama: Jonas e Antônio)
+### `js/utilitarios.js` (quem chama: `app.js` e `store.js`)
 
 | Função | Exemplo | Substitui no `app.js` |
 |---|---|---|
