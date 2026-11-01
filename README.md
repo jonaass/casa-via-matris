@@ -1,7 +1,7 @@
-# Casa Via Matris: protótipo do painel principal
+# Casa Via Matris
 
-Primeira etapa do projeto de extensão (ODS 10): front-end funcional da página
-principal do sistema de controle de **estoque, doações e finanças** da Casa Via Matris.
+Projeto de extensão (ODS 10): sistema de controle de **estoque, doações e finanças**
+da Casa Via Matris. Funciona no navegador, instala no celular como um app e abre sem internet.
 
 ## Versão no ar
 
@@ -38,6 +38,10 @@ Testes das regras de negócio (precisa do Node.js):
 node --test tests/store.test.js
 ```
 
+```bash
+node tests/testar-miguel.js
+```
+
 ## O que já funciona
 
 - **Resumo do dia**: saldo em caixa, itens abaixo do mínimo, itens que vencem em até 15 dias e doações do mês.
@@ -50,20 +54,30 @@ node --test tests/store.test.js
   O tempo pausa enquanto o mouse ou o foco do teclado estão em cima do aviso.
 - **Histórico**: as 50 últimas movimentações, com filtro por estoque ou dinheiro. Quando
   há mais de 50, a tela avisa quantas existem no total.
-- Os dados ficam salvos no navegador (localStorage) e sobrevivem a recarregar a página.
+- **Backup**: baixa 3 planilhas (estoque, doações, dinheiro) e restaura delas, mesmo depois de editadas no Excel. Avisa quando o último backup tem mais de 7 dias.
+- **Dados de exemplo**: aparecem na primeira abertura. "Começar do zero" apaga tudo para o uso real.
+- **App no celular**: instala na tela inicial e abre sem internet.
+- Os dados ficam salvos no aparelho (localStorage) e sobrevivem a recarregar a página.
 
 ## Estrutura
 
 ```
-index.html        a página (estrutura e textos)
-css/styles.css    o visual (cores, fontes, layout, celular)
-js/store.js       as regras de negócio e os dados (o "back-end de mentira")
-js/app.js         a tela: desenha a página e responde aos cliques
-tests/            testes automáticos das regras do store.js
+index.html          a página (estrutura e textos)
+css/styles.css      o visual (cores, fontes, layout, celular)
+js/utilitarios.js   datas e quantidades no formato brasileiro
+js/dados.js         a única parte que lê e grava no aparelho
+js/store.js         as regras de negócio (o que pode ser gravado)
+js/backup.js        planilhas: baixar e restaurar
+js/app.js           a tela: desenha a página e responde aos cliques
+sw.js               guarda os arquivos para abrir sem internet
+manifest.json       nome e ícones do app instalado
+tests/              testes automáticos
+ferramentas/        publicar no Artifact; gerar ícones e planilhas de teste
+MIGUEL.md           contrato detalhado de dados.js, backup.js e utilitarios.js
 ```
 
-A separação entre `store.js` e `app.js` é a decisão mais importante do protótipo.
-A tela nunca mexe nos dados diretamente: ela pede ao store (`registrar`, `estornar`,
+A separação em camadas é a decisão mais importante do projeto: tela (`app.js`) → regras
+(`store.js`) → armazenamento (`dados.js`). A tela nunca mexe nos dados diretamente: ela pede ao store (`registrar`, `estornar`,
 `resumo`) e redesenha com o que voltou. Quando o back-end em Python ficar pronto,
 cada função do `store.js` passa a fazer um `fetch()` para a API. Como `fetch` é
 assíncrono, o `app.js` vai precisar de `await` nessas chamadas e de desativar o botão
@@ -104,12 +118,18 @@ Encontrados na revisão do protótipo. Os marcados como corrigidos têm teste em
 - No celular, a página estourava a largura e o formulário ficava no fim.
 - O aviso com "Desfazer" sumia em 8 s e podia não ser lido pelo leitor de tela.
 
-### Para o protótipo (uso hoje)
+### Para o uso hoje
 
-- **Privacidade (LGPD)**: os dados ficam em texto aberto no navegador. Qualquer pessoa
-  que use o mesmo computador consegue ler. **Use só dados fictícios** até existir o back-end.
-  Não publique no GitHub Pages com dados reais: lá o armazenamento é compartilhado entre
-  todos os repositórios do mesmo usuário.
+- **Privacidade (LGPD)**: os dados e as planilhas ficam em texto aberto, sem senha. Quem usar
+  o aparelho consegue ler. Não registre nomes de pessoas acolhidas nem documentos, e guarde as
+  planilhas em local protegido.
+- **Mesma origem no GitHub Pages**: todos os sites de `jonaass.github.io` dividem o armazenamento
+  do navegador. Uma falha de script em outro repositório dessa conta poderia ler ou apagar os dados.
+  Para uso real com dados da casa, publique em um domínio próprio.
+- **Backup manual**: se o aparelho quebrar, só existe o que foi baixado. O app não tem como confirmar
+  que o arquivo chegou à pasta Downloads, então a pessoa precisa conferir.
+- **Importação não aplica as regras**: ela restaura registros, sem mexer no estoque nem conferir saldo.
+- **VERSAO**: publicar sem mudar a `VERSAO` no `js/dados.js` deixa os celulares na versão antiga.
 - As fontes vêm do Google Fonts, que recebe o IP de cada visitante. Para produção,
   baixe as fontes e sirva junto com o site.
 

@@ -1,0 +1,8 @@
+﻿Código;Data;Movimento;Valor (R$);Descrição;Quem
+t0;22/12/2025;Despesa;1.890,53;Farmácia;Pessoa Teste
+t1;11/08/2026;Despesa;1.954,44;Farmácia;Pessoa Teste
+t2;21/06/2026;Despesa;1.975,73;Farmácia;Pessoa Teste
+e1;31/02/2026;Entrada;10,00;Data que não existe;
+e2;05/10/2026;Doação;10,00;Movimento errado;
+e3;05/10/2026;Despesa;dez reais;Valor errado;
+e4;05/10/2026;Despesa;10,00;;Sem descrição

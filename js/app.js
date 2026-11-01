@@ -9,16 +9,13 @@
 (function () {
   'use strict';
 
-  const { criarStore, TIPOS, CATEGORIAS, DIAS_ALERTA_VALIDADE, dataISO, diasAte } = window.ViaMatris;
+  const { criarStore, TIPOS, CATEGORIAS, DIAS_ALERTA_VALIDADE } = window.ViaMatris;
   const store = criarStore();
 
   const brl = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
-  const numero = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 3 });
-  const dataCurta = new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'short' });
-  const dataLonga = new Intl.DateTimeFormat('pt-BR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  const DIAS_ENTRE_BACKUPS = 7;
 
   const $ = (id) => document.getElementById(id);
-  const daISO = (iso) => new Date(iso + 'T00:00:00');
 
   // Cria um elemento com atributos e filhos. Strings viram nós de texto (seguro).
   function el(tag, atributos = {}, ...filhos) {
@@ -33,10 +30,6 @@
       no.append(filho instanceof Node ? filho : document.createTextNode(String(filho)));
     }
     return no;
-  }
-
-  function quantidadeTexto(q, unidade) {
-    return `${numero.format(q)} ${unidade}`;
   }
 
   // ---------- resumo ----------
@@ -105,15 +98,15 @@
       return el('li', { class: `prateleira-item ${s.classe}` },
         el('div', { class: 'item-topo' },
           el('span', { class: 'item-nome' }, item.nome),
-          el('span', { class: 'item-qtd' }, numero.format(item.quantidade), el('small', {}, ` ${item.unidade}`))),
+          el('span', { class: 'item-qtd' }, textoDaQuantidade(item.quantidade), el('small', {}, ` ${item.unidade}`))),
         el('div', {
           class: 'barra',
           role: 'img',
-          'aria-label': `${item.nome}: ${quantidadeTexto(item.quantidade, item.unidade)}, mínimo ${quantidadeTexto(item.minimo, item.unidade)}. ${s.texto}.`,
+          'aria-label': `${item.nome}: ${textoDaQuantidade(item.quantidade, item.unidade)}, mínimo ${textoDaQuantidade(item.minimo, item.unidade)}. ${s.texto}.`,
         }, barra, marca),
         el('div', { class: 'item-rodape' },
           el('span', { class: 'situacao' }, s.texto),
-          el('span', {}, `mín. ${quantidadeTexto(item.minimo, item.unidade)}`),
+          el('span', {}, `mín. ${textoDaQuantidade(item.minimo, item.unidade)}`),
           validade));
     }));
     $('lista-vazia').hidden = itens.length > 0;
@@ -141,7 +134,7 @@
       el('optgroup', { label: cat },
         itens.filter((i) => i.categoria === cat)
           .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
-          .map((i) => el('option', { value: i.id }, `${i.nome} (${quantidadeTexto(i.quantidade, i.unidade)})`))));
+          .map((i) => el('option', { value: i.codigo }, `${i.nome} (${textoDaQuantidade(i.quantidade, i.unidade)})`))));
     const opcoes = [el('option', { value: '' }, 'Escolha um item'), ...grupos];
     if (tipoAtual() === 'doacao_item') opcoes.push(el('option', { value: NOVO }, 'Cadastrar item novo'));
     select.replaceChildren(...opcoes);
@@ -233,9 +226,9 @@
     const mov = resultado.movimento;
     const item = mov.itemId ? store.item(mov.itemId) : null;
     const detalhe = item
-      ? `${quantidadeTexto(mov.quantidade, item.unidade)} de ${item.nome}`
+      ? `${textoDaQuantidade(mov.quantidade, item.unidade)} de ${item.nome}`
       : brl.format(mov.valorCentavos / 100);
-    avisar(`${textosPorTipo[tipo].feito}: ${detalhe}.`, mov.id, resultado.salvo);
+    avisar(`${textosPorTipo[tipo].feito}: ${detalhe}.`, mov.codigo);
 
     // Limpa os campos de conteúdo, mantendo tipo, item e data para lançamentos em sequência.
     ['f-quantidade', 'f-validade', 'f-valor', 'f-pessoa', 'f-descricao', 'f-novo-nome', 'f-novo-unidade'].forEach((id) => { $(id).value = ''; });
@@ -269,10 +262,8 @@
     temporizador = setTimeout(fecharAviso, TEMPO_AVISO);
   }
 
-  function avisar(texto, idDesfazer = null, salvo = true) {
-    $('aviso-texto').textContent = salvo
-      ? texto
-      : `${texto} Atenção: o navegador não deixou salvar; o registro some ao fechar a página.`;
+  function avisar(texto, idDesfazer = null) {
+    $('aviso-texto').textContent = texto;
     ultimoId = idDesfazer;
     $('aviso-desfazer').hidden = !idDesfazer;
     $('aviso-fechar').hidden = false;
@@ -306,17 +297,20 @@
     $('historico-limite').hidden = todos.length <= LIMITE_HISTORICO;
     $('historico-limite').textContent = `Mostrando as ${LIMITE_HISTORICO} mais recentes de ${todos.length} movimentações.`;
 
+    const itens = new Map(store.itens().map((i) => [i.codigo, i]));
     $('corpo-historico').replaceChildren(...movs.map((m) => {
       const tipo = TIPOS[m.tipo];
-      const item = m.itemId ? store.item(m.itemId) : null;
       const sinal = tipo.sinal > 0 ? '+' : '−';
-      const valor = item
-        ? `${sinal}${quantidadeTexto(m.quantidade, item.unidade)}`
+      const item = itens.get(m.itemId);
+      const valor = tipo.area === 'estoque'
+        ? `${sinal}${textoDaQuantidade(m.quantidade, item?.unidade)}`
         : `${sinal}${brl.format(m.valorCentavos / 100)}`;
-      const detalhe = item ? [item.nome, m.descricao].filter(Boolean).join(': ') : m.descricao;
+      const detalhe = tipo.area === 'estoque'
+        ? [item?.nome ?? '(item apagado)', m.descricao].filter(Boolean).join(': ')
+        : m.descricao;
 
       return el('tr', {},
-        el('td', {}, el('time', { datetime: m.data }, dataCurta.format(daISO(m.data)))),
+        el('td', {}, el('time', { datetime: m.data }, dataCurta(m.data))),
         el('td', {}, el('span', { class: `etiqueta ${m.tipo}` }, tipo.rotulo)),
         el('td', {}, detalhe || '—'),
         el('td', {}, m.pessoa || '—'),
@@ -332,40 +326,105 @@
     r.addEventListener('change', (e) => { filtro.categoria = e.target.value; desenharDespensa(); }));
   $('filtro-historico').addEventListener('change', desenharHistorico);
 
-  function mostrarConfirmacao(mostrar) {
-    $('confirmar-restaurar').hidden = !mostrar;
-    $('restaurar').hidden = mostrar;
-    $(mostrar ? 'restaurar-nao' : 'restaurar').focus();
+  // ---------- apagar tudo ----------
+
+  const CONFIRMACOES = {
+    zero: {
+      texto: 'Isso apaga tudo o que está neste aparelho, sem volta. Se houver dados reais, baixe as planilhas antes.',
+      fazer: () => store.apagarTudo(),
+      feito: 'Tudo apagado. Registre a primeira doação para cadastrar os itens da casa.',
+    },
+    exemplo: {
+      texto: 'Isso troca tudo o que está neste aparelho pelos dados de exemplo, sem volta.',
+      fazer: () => store.restaurarExemplo(),
+      feito: 'Dados de exemplo restaurados.',
+    },
+  };
+  let confirmacao = null;
+
+  function mostrarConfirmacao(chave) {
+    confirmacao = chave;
+    $('opcoes').open = true;
+    $('confirmar-restaurar').hidden = !chave;
+    $('restaurar').hidden = Boolean(chave);
+    $('comecar-zero').hidden = Boolean(chave);
+    if (chave) $('confirmar-texto').textContent = CONFIRMACOES[chave].texto;
+    $(chave ? 'restaurar-nao' : 'comecar-zero').focus();
   }
 
-  $('restaurar').addEventListener('click', () => mostrarConfirmacao(true));
-  $('restaurar-nao').addEventListener('click', () => mostrarConfirmacao(false));
+  $('comecar-zero').addEventListener('click', () => mostrarConfirmacao('zero'));
+  $('faixa-comecar-zero').addEventListener('click', () => mostrarConfirmacao('zero'));
+  $('restaurar').addEventListener('click', () => mostrarConfirmacao('exemplo'));
+  $('restaurar-nao').addEventListener('click', () => mostrarConfirmacao(null));
   $('restaurar-sim').addEventListener('click', () => {
-    store.restaurarExemplo();
-    mostrarConfirmacao(false);
+    const { fazer, feito } = CONFIRMACOES[confirmacao];
+    const erro = fazer();
+    mostrarConfirmacao(null);
     atualizarTudo();
-    avisar('Dados de exemplo restaurados.');
+    avisar(erro ?? feito);
   });
 
-  // Duas abas abertas: quando a outra salva, esta relê os dados em vez de sobrescrevê-los depois.
-  window.addEventListener('storage', (e) => {
-    if (e.key !== store.chave) return;
-    store.recarregar();
+  // ---------- backup ----------
+
+  function desenharBackup() {
+    const dias = diasDesdeUltimoBackup();
+    const quando = dias === null ? 'Ainda não foi feito backup.'
+      : dias === 0 ? 'Último backup: hoje.'
+        : `Último backup: há ${dias} dia${dias === 1 ? '' : 's'}.`;
+    $('backup-quando').textContent = quando;
+
+    const temExemplos = store.temExemplos();
+    $('faixa-exemplo').hidden = !temExemplos;
+    // Exemplos não precisam de backup; dados reais sim, e são a única cópia.
+    const atrasado = !temExemplos && store.movimentos().length > 0 && (dias === null || dias > DIAS_ENTRE_BACKUPS);
+    $('faixa-backup').hidden = !atrasado;
+    $('faixa-backup-texto').textContent = `${quando} Os dados só existem neste aparelho: baixe as planilhas e guarde fora dele.`;
+  }
+
+  async function fazerBackup() {
+    const r = await baixarTodasAsPlanilhas();
+    desenharBackup();
+    avisar(r.ok ? 'Confira na pasta Downloads se chegaram as 3 planilhas e guarde-as fora deste aparelho.' : r.erros.join(' '));
+  }
+
+  $('backup-baixar').addEventListener('click', fazerBackup);
+  $('faixa-backup-baixar').addEventListener('click', fazerBackup);
+  $('backup-restaurar').addEventListener('click', () => $('backup-arquivo').click());
+  $('backup-arquivo').addEventListener('change', async (e) => {
+    const arquivos = [...e.target.files];
+    e.target.value = ''; // permite escolher o mesmo arquivo de novo
+    if (!arquivos.length) return;
+
+    // Sem isso, os exemplos ficariam no lugar dos dados reais de mesmo código.
+    const r = await restaurarArquivos(arquivos, () => { if (store.soExemplos()) store.apagarTudo(); });
     atualizarTudo();
+
+    const titulo = r.ok ? `${r.importados} registros restaurados, ${r.ignorados} já existiam.` : 'Nada foi restaurado.';
+    const problemas = r.erros.slice(0, 3).join(' ');
+    const mais = r.erros.length > 3 ? ` E mais ${r.erros.length - 3} problemas.` : '';
+    avisar(`${titulo} ${problemas}${mais}`.trim());
   });
+
+  // Duas abas abertas: quando a outra salva, esta redesenha com o que está gravado.
+  aoMudarEmOutraAba(() => atualizarTudo());
 
   function atualizarTudo() {
     desenharResumo();
     desenharDespensa();
     ajustarCampos();
     desenharHistorico();
+    desenharBackup();
   }
 
   // Garante o idioma certo para leitores de tela também quando a página é hospedada dentro de outra estrutura.
   document.documentElement.lang = 'pt-BR';
-  const hoje = new Date();
-  $('data-hoje').textContent = dataLonga.format(hoje);
-  $('f-data').value = dataISO(hoje);
-  $('f-data').max = dataISO(hoje);
+  $('data-hoje').textContent = dataPorExtenso();
+  $('f-data').value = dataDeHoje();
+  $('f-data').max = dataDeHoje();
+  $('versao').textContent = VERSAO;
   atualizarTudo();
+
+  pedirArmazenamentoPersistente();
+  // Abre sem internet. Falha em silêncio onde service worker não é permitido (arquivo local, claude.ai).
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).catch(() => {});
 })();

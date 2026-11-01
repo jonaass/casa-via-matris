@@ -1,0 +1,201 @@
+﻿Código;Data;Movimento;Valor (R$);Descrição;Quem
+t0;22/12/2025;Despesa;1.890,53;Farmácia;Pessoa Teste
+t1;11/08/2026;Despesa;1.954,44;Farmácia;Pessoa Teste
+t2;21/06/2026;Despesa;1.975,73;Farmácia;Pessoa Teste
+t3;07/02/2026;Entrada;1.275,34;Contribuição mensal;Pessoa Teste
+t4;20/03/2026;Entrada;208,11;Contribuição mensal;Pessoa Teste
+t5;14/06/2026;Despesa;885,40;Botijão de gás;Pessoa Teste
+t6;22/08/2026;Despesa;400,39;Conta de luz;Pessoa Teste
+t7;10/11/2025;Entrada;405,56;Rifa;Pessoa Teste
+t8;02/04/2026;Entrada;1.073,49;Doação via Pix;Pessoa Teste
+t9;02/04/2026;Despesa;168,22;Farmácia;Pessoa Teste
+t10;15/04/2026;Entrada;1.536,12;Rifa;Pessoa Teste
+t11;01/03/2026;Entrada;20,45;Rifa;Pessoa Teste
+t12;15/04/2026;Despesa;1.103,43;Feira da semana;Pessoa Teste
+t13;11/07/2026;Entrada;720,48;Rifa;Pessoa Teste
+t14;17/10/2026;Despesa;1.024,36;Farmácia;Pessoa Teste
+t15;08/08/2026;Despesa;1.230,23;Farmácia;Pessoa Teste
+t16;13/04/2026;Entrada;1.556,61;Doação via Pix;Pessoa Teste
+t17;06/12/2025;Entrada;1.128,58;Doação via Pix;Pessoa Teste
+t18;30/07/2026;Entrada;136,81;Rifa;Pessoa Teste
+t19;17/05/2026;Despesa;559,85;Farmácia;Pessoa Teste
+t20;12/05/2026;Despesa;998,85;Feira da semana;Pessoa Teste
+t21;24/06/2026;Despesa;219,71;Farmácia;Pessoa Teste
+t22;28/01/2026;Despesa;141,53;Conta de luz;Pessoa Teste
+t23;03/12/2025;Despesa;184,87;Botijão de gás;Pessoa Teste
+t24;27/06/2026;Entrada;527,61;Doação via Pix;Pessoa Teste
+t25;01/07/2026;Entrada;335,88;Bazar beneficente;Pessoa Teste
+t26;16/01/2026;Despesa;576,38;Conta de luz;Pessoa Teste
+t27;26/04/2026;Despesa;444,84;Feira da semana;Pessoa Teste
+t28;25/05/2026;Entrada;288,37;Bazar beneficente;Pessoa Teste
+t29;10/01/2026;Entrada;1.780,62;Contribuição mensal;Pessoa Teste
+t30;22/07/2026;Despesa;204,22;Farmácia;Pessoa Teste
+t31;09/11/2025;Entrada;795,58;Doação via Pix;Pessoa Teste
+t32;07/05/2026;Entrada;1.401,55;Doação via Pix;Pessoa Teste
+t33;26/09/2026;Despesa;1.331,34;Feira da semana;Pessoa Teste
+t34;30/03/2026;Despesa;1.290,03;Conta de luz;Pessoa Teste
+t35;29/04/2026;Entrada;1.671,14;Rifa;Pessoa Teste
+t36;23/03/2026;Despesa;466,73;Botijão de gás;Pessoa Teste
+t37;07/03/2026;Despesa;1.146,83;Farmácia;Pessoa Teste
+t38;28/06/2026;Despesa;232,18;Feira da semana;Pessoa Teste
+t39;29/06/2026;Despesa;1.972,32;Farmácia;Pessoa Teste
+t40;12/05/2026;Despesa;80,23;Farmácia;Pessoa Teste
+t41;30/07/2026;Despesa;1.283,08;Feira da semana;Pessoa Teste
+t42;21/06/2026;Entrada;897,17;Contribuição mensal;Pessoa Teste
+t43;20/01/2026;Despesa;31,61;Feira da semana;Pessoa Teste
+t44;30/06/2026;Entrada;1.892,63;Doação via Pix;Pessoa Teste
+t45;20/01/2026;Despesa;1.992,48;Farmácia;Pessoa Teste
+t46;05/12/2025;Entrada;1.871,05;Rifa;Pessoa Teste
+t47;23/10/2026;Despesa;248,93;Farmácia;Pessoa Teste
+t48;07/04/2026;Despesa;1.818,47;Botijão de gás;Pessoa Teste
+t49;26/11/2025;Entrada;1.529,51;Contribuição mensal;Pessoa Teste
+t50;21/01/2026;Despesa;1.396,77;Farmácia;Pessoa Teste
+t51;23/01/2026;Despesa;872,14;Farmácia;Pessoa Teste
+t52;15/06/2026;Despesa;808,79;Farmácia;Pessoa Teste
+t53;31/08/2026;Despesa;1.895,80;Botijão de gás;Pessoa Teste
+t54;31/08/2026;Entrada;1.952,41;Contribuição mensal;Pessoa Teste
+t55;13/07/2026;Entrada;1.941,20;Bazar beneficente;Pessoa Teste
+t56;03/01/2026;Despesa;1.997,83;Feira da semana;Pessoa Teste
+t57;24/07/2026;Despesa;781,59;Conta de luz;Pessoa Teste
+t58;01/08/2026;Entrada;797,37;Contribuição mensal;Pessoa Teste
+t59;13/06/2026;Entrada;124,31;Bazar beneficente;Pessoa Teste
+t60;08/11/2025;Entrada;336,03;Contribuição mensal;Pessoa Teste
+t61;25/10/2026;Despesa;1.509,87;Conta de luz;Pessoa Teste
+t62;28/02/2026;Despesa;1.159,66;Farmácia;Pessoa Teste
+t63;05/10/2026;Despesa;666,85;Botijão de gás;Pessoa Teste
+t64;28/09/2026;Despesa;1.055,43;Conta de luz;Pessoa Teste
+t65;09/01/2026;Despesa;1.655,05;Conta de luz;Pessoa Teste
+t66;16/08/2026;Entrada;1.480,45;Bazar beneficente;Pessoa Teste
+t67;26/06/2026;Despesa;315,51;Conta de luz;Pessoa Teste
+t68;06/02/2026;Despesa;1.002,13;Botijão de gás;Pessoa Teste
+t69;01/06/2026;Despesa;1.547,78;Farmácia;Pessoa Teste
+t70;13/01/2026;Despesa;1.632,98;Feira da semana;Pessoa Teste
+t71;17/07/2026;Entrada;1.644,75;Doação via Pix;Pessoa Teste
+t72;27/11/2025;Entrada;217,82;Contribuição mensal;Pessoa Teste
+t73;04/08/2026;Entrada;1.452,01;Bazar beneficente;Pessoa Teste
+t74;30/10/2026;Entrada;1.075,90;Bazar beneficente;Pessoa Teste
+t75;04/06/2026;Despesa;90,56;Farmácia;Pessoa Teste
+t76;04/11/2025;Entrada;746,12;Contribuição mensal;Pessoa Teste
+t77;14/11/2025;Despesa;616,90;Conta de luz;Pessoa Teste
+t78;28/03/2026;Despesa;305,87;Botijão de gás;Pessoa Teste
+t79;17/06/2026;Entrada;377,86;Bazar beneficente;Pessoa Teste
+t80;08/08/2026;Entrada;811,38;Doação via Pix;Pessoa Teste
+t81;29/08/2026;Despesa;1.233,66;Farmácia;Pessoa Teste
+t82;14/06/2026;Despesa;1.316,95;Farmácia;Pessoa Teste
+t83;20/09/2026;Despesa;1.572,71;Farmácia;Pessoa Teste
+t84;19/05/2026;Entrada;1.587,59;Rifa;Pessoa Teste
+t85;15/09/2026;Despesa;605,11;Conta de luz;Pessoa Teste
+t86;09/01/2026;Entrada;110,46;Contribuição mensal;Pessoa Teste
+t87;08/02/2026;Entrada;1.712,89;Rifa;Pessoa Teste
+t88;31/07/2026;Despesa;1.539,40;Feira da semana;Pessoa Teste
+t89;15/09/2026;Despesa;1.237,10;Farmácia;Pessoa Teste
+t90;14/05/2026;Despesa;846,63;Farmácia;Pessoa Teste
+t91;16/05/2026;Entrada;1.084,10;Bazar beneficente;Pessoa Teste
+t92;26/11/2025;Despesa;1.054,76;Feira da semana;Pessoa Teste
+t93;16/09/2026;Entrada;829,48;Rifa;Pessoa Teste
+t94;02/09/2026;Despesa;1.064,52;Feira da semana;Pessoa Teste
+t95;03/04/2026;Entrada;147,09;Rifa;Pessoa Teste
+t96;17/12/2025;Entrada;1.987,97;Contribuição mensal;Pessoa Teste
+t97;05/10/2026;Despesa;538,61;Farmácia;Pessoa Teste
+t98;06/06/2026;Despesa;1.153,49;Botijão de gás;Pessoa Teste
+t99;17/10/2026;Despesa;1.656,56;Conta de luz;Pessoa Teste
+t100;25/05/2026;Entrada;1.448,99;Bazar beneficente;Pessoa Teste
+t101;14/09/2026;Entrada;594,03;Rifa;Pessoa Teste
+t102;01/09/2026;Entrada;1.702,93;Rifa;Pessoa Teste
+t103;04/06/2026;Entrada;1.338,97;Rifa;Pessoa Teste
+t104;26/02/2026;Despesa;1.242,89;Farmácia;Pessoa Teste
+t105;22/01/2026;Entrada;384,17;Rifa;Pessoa Teste
+t106;29/12/2025;Despesa;1.337,32;Botijão de gás;Pessoa Teste
+t107;12/06/2026;Entrada;1.092,74;Doação via Pix;Pessoa Teste
+t108;30/10/2026;Despesa;746,44;Feira da semana;Pessoa Teste
+t109;16/08/2026;Despesa;1.175,59;Farmácia;Pessoa Teste
+t110;14/05/2026;Despesa;1.451,81;Feira da semana;Pessoa Teste
+t111;20/05/2026;Despesa;499,54;Farmácia;Pessoa Teste
+t112;04/07/2026;Entrada;1.081,82;Rifa;Pessoa Teste
+t113;03/03/2026;Entrada;1.853,71;Contribuição mensal;Pessoa Teste
+t114;26/11/2025;Despesa;1.714,22;Farmácia;Pessoa Teste
+t115;13/10/2026;Entrada;335,94;Rifa;Pessoa Teste
+t116;20/03/2026;Despesa;266,38;Conta de luz;Pessoa Teste
+t117;19/08/2026;Despesa;1.079,73;Conta de luz;Pessoa Teste
+t118;05/03/2026;Entrada;699,74;Doação via Pix;Pessoa Teste
+t119;03/12/2025;Despesa;215,54;Farmácia;Pessoa Teste
+t120;22/05/2026;Despesa;1.648,11;Farmácia;Pessoa Teste
+t121;19/12/2025;Despesa;184,36;Conta de luz;Pessoa Teste
+t122;07/07/2026;Entrada;1.962,60;Contribuição mensal;Pessoa Teste
+t123;11/09/2026;Entrada;1.998,26;Rifa;Pessoa Teste
+t124;07/08/2026;Entrada;1.824,28;Rifa;Pessoa Teste
+t125;08/10/2026;Despesa;855,32;Conta de luz;Pessoa Teste
+t126;01/05/2026;Entrada;987,62;Contribuição mensal;Pessoa Teste
+t127;28/06/2026;Despesa;1.397,42;Botijão de gás;Pessoa Teste
+t128;05/08/2026;Despesa;463,93;Botijão de gás;Pessoa Teste
+t129;18/12/2025;Entrada;1.795,79;Rifa;Pessoa Teste
+t130;06/01/2026;Entrada;380,17;Rifa;Pessoa Teste
+t131;09/12/2025;Entrada;670,78;Rifa;Pessoa Teste
+t132;24/11/2025;Despesa;29,63;Feira da semana;Pessoa Teste
+t133;19/11/2025;Despesa;1.437,87;Feira da semana;Pessoa Teste
+t134;19/03/2026;Entrada;910,87;Doação via Pix;Pessoa Teste
+t135;12/11/2025;Despesa;660,61;Farmácia;Pessoa Teste
+t136;22/07/2026;Despesa;1.013,45;Feira da semana;Pessoa Teste
+t137;02/07/2026;Despesa;1.004,72;Conta de luz;Pessoa Teste
+t138;07/11/2025;Despesa;778,92;Feira da semana;Pessoa Teste
+t139;13/06/2026;Entrada;26,22;Rifa;Pessoa Teste
+t140;07/06/2026;Entrada;608,24;Rifa;Pessoa Teste
+t141;10/12/2025;Despesa;503,41;Botijão de gás;Pessoa Teste
+t142;14/12/2025;Despesa;259,70;Botijão de gás;Pessoa Teste
+t143;20/03/2026;Entrada;92,46;Contribuição mensal;Pessoa Teste
+t144;15/09/2026;Despesa;778,61;Botijão de gás;Pessoa Teste
+t145;03/08/2026;Despesa;531,37;Farmácia;Pessoa Teste
+t146;02/02/2026;Entrada;1.320,42;Contribuição mensal;Pessoa Teste
+t147;22/06/2026;Despesa;1.268,13;Botijão de gás;Pessoa Teste
+t148;03/09/2026;Despesa;1.232,70;Feira da semana;Pessoa Teste
+t149;08/07/2026;Entrada;1.777,94;Bazar beneficente;Pessoa Teste
+t150;15/09/2026;Despesa;1.039,35;Feira da semana;Pessoa Teste
+t151;30/01/2026;Entrada;328,98;Contribuição mensal;Pessoa Teste
+t152;21/11/2025;Despesa;1.968,48;Feira da semana;Pessoa Teste
+t153;09/12/2025;Despesa;978,79;Farmácia;Pessoa Teste
+t154;04/03/2026;Entrada;70,60;Bazar beneficente;Pessoa Teste
+t155;04/12/2025;Despesa;170,71;Botijão de gás;Pessoa Teste
+t156;03/12/2025;Despesa;1.075,32;Feira da semana;Pessoa Teste
+t157;08/10/2026;Entrada;102,54;Bazar beneficente;Pessoa Teste
+t158;02/09/2026;Despesa;259,78;Farmácia;Pessoa Teste
+t159;16/04/2026;Entrada;1.194,19;Bazar beneficente;Pessoa Teste
+t160;04/01/2026;Despesa;1.950,81;Farmácia;Pessoa Teste
+t161;30/11/2025;Entrada;264,57;Rifa;Pessoa Teste
+t162;10/06/2026;Despesa;90,76;Farmácia;Pessoa Teste
+t163;18/03/2026;Despesa;1.170,74;Botijão de gás;Pessoa Teste
+t164;11/09/2026;Entrada;1.802,46;Contribuição mensal;Pessoa Teste
+t165;30/09/2026;Despesa;1.048,69;Feira da semana;Pessoa Teste
+t166;30/08/2026;Despesa;1.197,01;Botijão de gás;Pessoa Teste
+t167;07/12/2025;Entrada;1.681,39;Bazar beneficente;Pessoa Teste
+t168;14/05/2026;Entrada;643,50;Doação via Pix;Pessoa Teste
+t169;26/09/2026;Entrada;1.457,82;Bazar beneficente;Pessoa Teste
+t170;04/07/2026;Entrada;866,29;Bazar beneficente;Pessoa Teste
+t171;12/06/2026;Entrada;384,29;Doação via Pix;Pessoa Teste
+t172;03/08/2026;Entrada;293,16;Contribuição mensal;Pessoa Teste
+t173;24/10/2026;Entrada;944,11;Bazar beneficente;Pessoa Teste
+t174;23/10/2026;Entrada;461,77;Contribuição mensal;Pessoa Teste
+t175;28/08/2026;Despesa;1.949,36;Conta de luz;Pessoa Teste
+t176;29/09/2026;Despesa;1.253,45;Conta de luz;Pessoa Teste
+t177;11/02/2026;Despesa;1.561,25;Feira da semana;Pessoa Teste
+t178;16/02/2026;Entrada;585,77;Rifa;Pessoa Teste
+t179;11/03/2026;Entrada;1.691,47;Contribuição mensal;Pessoa Teste
+t180;28/02/2026;Entrada;1.057,81;Doação via Pix;Pessoa Teste
+t181;22/02/2026;Despesa;1.872,51;Conta de luz;Pessoa Teste
+t182;20/09/2026;Despesa;849,39;Conta de luz;Pessoa Teste
+t183;28/08/2026;Entrada;725,93;Doação via Pix;Pessoa Teste
+t184;30/12/2025;Despesa;1.395,82;Farmácia;Pessoa Teste
+t185;15/02/2026;Despesa;1.592,09;Farmácia;Pessoa Teste
+t186;06/11/2025;Despesa;304,92;Conta de luz;Pessoa Teste
+t187;14/03/2026;Entrada;603,98;Rifa;Pessoa Teste
+t188;13/03/2026;Despesa;1.050,24;Feira da semana;Pessoa Teste
+t189;24/05/2026;Despesa;1.123,73;Conta de luz;Pessoa Teste
+t190;23/04/2026;Despesa;405,13;Feira da semana;Pessoa Teste
+t191;15/09/2026;Despesa;228,77;Conta de luz;Pessoa Teste
+t192;12/09/2026;Entrada;1.956,89;Rifa;Pessoa Teste
+t193;20/01/2026;Despesa;162,23;Botijão de gás;Pessoa Teste
+t194;04/04/2026;Despesa;931,93;Conta de luz;Pessoa Teste
+t195;06/06/2026;Despesa;1.578,93;Conta de luz;Pessoa Teste
+t196;08/09/2026;Despesa;1.519,97;Feira da semana;Pessoa Teste
+t197;29/11/2025;Entrada;1.269,03;Bazar beneficente;Pessoa Teste
+t198;05/05/2026;Entrada;1.463,21;Doação via Pix;Pessoa Teste
+t199;11/06/2026;Despesa;1.509,96;Conta de luz;Pessoa Teste

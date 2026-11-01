@@ -17,6 +17,7 @@
   --pinho-claro: #dcebe5;
   --calendula: #b7791f;
   --calendula-texto: #7f520c;
+  --calendula-fundo: #fbefd9;
   --rubi: #a8423f;
   --rubi-claro: #f6e0de;
   --foco: #2f6fd6;
@@ -43,7 +44,7 @@
   :root:not([data-theme="light"]) {
     --tinta: #e2ebe7; --suave: #9db0a9; --papel: #11191b; --superficie: #1a2427; --linha: #2d3c3f;
     --pinho: #6cc0a8; --pinho-claro: #1f3d35;
-    --calendula: #c98b2e; --calendula-texto: #e8b866;
+    --calendula: #c98b2e; --calendula-texto: #e8b866; --calendula-fundo: #3a2e18;
     --rubi: #ea8580; --rubi-claro: #3d2321; --foco: #7aa7ff; --borda-campo: #6f827b;
     --acao: #6cc0a8; --acao-hover: #86d0bb; --acao-texto: #0f1d19;
     --pinho-texto: #a5dccb; --rubi-texto: #f3b0ab; --erro-fundo: #2c1b1b; --aviso-fundo: #2d3c3f;
@@ -53,7 +54,7 @@
 :root[data-theme="dark"] {
   --tinta: #e2ebe7; --suave: #9db0a9; --papel: #11191b; --superficie: #1a2427; --linha: #2d3c3f;
   --pinho: #6cc0a8; --pinho-claro: #1f3d35;
-  --calendula: #c98b2e; --calendula-texto: #e8b866;
+  --calendula: #c98b2e; --calendula-texto: #e8b866; --calendula-fundo: #3a2e18;
   --rubi: #ea8580; --rubi-claro: #3d2321; --foco: #7aa7ff; --borda-campo: #6f827b;
   --acao: #6cc0a8; --acao-hover: #86d0bb; --acao-texto: #0f1d19;
   --pinho-texto: #a5dccb; --rubi-texto: #f3b0ab; --erro-fundo: #2c1b1b; --aviso-fundo: #2d3c3f;
@@ -109,6 +110,7 @@ p { margin: 0; }
   position: sticky; top: 0; height: 100vh;
   display: flex; flex-direction: column; gap: 32px;
   padding: 28px 20px;
+  overflow-y: auto; /* a seção de backup aberta não cabe em telas baixas */
   background: var(--lateral);
   color: #e6f0ec;
 }
@@ -131,6 +133,7 @@ p { margin: 0; }
 .lateral :focus-visible { outline-color: #f3c77c; }
 .opcoes summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; color: #e6f0ec; }
 .opcoes[open] summary { margin-bottom: 8px; }
+.opcoes[open] { display: grid; gap: 10px; }
 .confirmar { display: grid; gap: 8px; color: #fff; }
 .confirmar-acoes { display: flex; flex-wrap: wrap; gap: 8px; }
 .lateral #restaurar-sim { background: #f3c77c; color: #16443a; border-color: #f3c77c; font-weight: 700; }
@@ -141,6 +144,16 @@ main:focus { outline: none; }
 
 .topo-data { color: var(--suave); margin-bottom: 6px; }
 .topo-data::first-letter { text-transform: uppercase; }
+
+/* ---------- faixas de aviso ---------- */
+
+.faixa {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px;
+  padding: 12px 18px; border-radius: var(--raio-grande);
+  background: var(--calendula-fundo); color: var(--tinta);
+  border: 1px solid var(--calendula);
+}
+.faixa p { flex: 1 1 260px; min-width: 0; }
 
 /* ---------- indicadores ---------- */
 

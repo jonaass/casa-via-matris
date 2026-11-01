@@ -11,6 +11,11 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&display=swap">
   <link rel="stylesheet" href="css/styles.css">
+  <!-- Faz o site instalar no celular como um app (o registro do sw.js fica no app.js, porque a CSP bloqueia script inline). -->
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icones/icone-192.png">
+  <link rel="apple-touch-icon" href="icones/icone-apple-180.png">
+  <meta name="theme-color" content="#16443a">
 </head>
 <body>
   <a class="pular" href="#conteudo">Pular para o conteúdo</a>
@@ -35,18 +40,24 @@
         <a href="#historico">Histórico</a>
       </nav>
 
-      <details class="lateral-rodape opcoes">
-        <summary>Sobre este protótipo</summary>
-        <p>Os dados ficam guardados só neste navegador. Use apenas dados fictícios: não coloque nomes reais de pessoas acolhidas.</p>
-        <button type="button" class="botao-fantasma" id="restaurar">Restaurar dados de exemplo</button>
+      <details class="lateral-rodape opcoes" id="opcoes">
+        <summary>Backup e sistema</summary>
+        <p id="backup-quando"></p>
+        <button type="button" class="botao-fantasma" id="backup-baixar">Baixar planilhas</button>
+        <button type="button" class="botao-fantasma" id="backup-restaurar">Restaurar de planilhas</button>
+        <input type="file" id="backup-arquivo" accept=".csv,text/csv" multiple hidden>
+        <p>Os dados ficam só neste aparelho. Não coloque nomes de pessoas acolhidas nem documentos.</p>
+        <button type="button" class="botao-fantasma" id="comecar-zero">Começar do zero</button>
+        <button type="button" class="botao-fantasma" id="restaurar">Mostrar dados de exemplo</button>
         <!-- Confirmação dentro da página: diálogos confirm() são bloqueados em alguns lugares onde o site fica hospedado. -->
         <div class="confirmar" id="confirmar-restaurar" hidden>
-          <p>Isso apaga tudo o que foi lançado neste navegador.</p>
+          <p id="confirmar-texto"></p>
           <div class="confirmar-acoes">
-            <button type="button" class="botao-fantasma" id="restaurar-sim">Apagar e restaurar</button>
+            <button type="button" class="botao-fantasma" id="restaurar-sim">Apagar</button>
             <button type="button" class="botao-fantasma" id="restaurar-nao">Cancelar</button>
           </div>
         </div>
+        <p>Versão <span id="versao"></span></p>
       </details>
     </aside>
 
@@ -55,6 +66,15 @@
         <p class="topo-data" id="data-hoje"></p>
         <h1>Como está a casa hoje</h1>
       </header>
+
+      <div class="faixa" id="faixa-exemplo" hidden>
+        <p>Estes são dados de exemplo. Para usar de verdade, apague-os e cadastre os itens da casa.</p>
+        <button type="button" class="botao-fantasma" id="faixa-comecar-zero">Começar do zero</button>
+      </div>
+      <div class="faixa" id="faixa-backup" hidden>
+        <p id="faixa-backup-texto"></p>
+        <button type="button" class="botao-fantasma" id="faixa-backup-baixar">Baixar planilhas</button>
+      </div>
 
       <section id="resumo" class="resumo" aria-label="Resumo do dia">
         <div class="indicador">
@@ -228,7 +248,11 @@
     </div>
   </div>
 
+  <!-- A ordem importa: cada arquivo usa os anteriores. -->
+  <script src="js/utilitarios.js"></script>
+  <script src="js/dados.js"></script>
   <script src="js/store.js"></script>
+  <script src="js/backup.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>
