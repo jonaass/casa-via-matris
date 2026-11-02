@@ -6,7 +6,7 @@ da Casa Via Matris. Funciona no navegador, instala no celular como um app e abre
 ## Versão 1.0
 
 Esta é a primeira versão que deixa de ser protótipo: tem tela de acesso e perfis. Os números 1.0.1 a 1.0.4
-usados antes eram do protótipo. As próximas versões seguem de 1.1.0 em diante.
+usados antes eram do protótipo. A primeira versão com acesso é a 1.0.0, corrigida na 1.0.5.
 
 ## Versão no ar
 

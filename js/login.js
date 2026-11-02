@@ -209,6 +209,10 @@
 
   // ---------- início ----------
 
+  // Fica aqui, e não no app.js, para a tela de acesso também abrir sem internet antes do primeiro login.
+  // Falha em silêncio onde service worker não é permitido (arquivo local).
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).catch(() => { });
+
   if (contaAtual()) {
     abrirApp();
     return;

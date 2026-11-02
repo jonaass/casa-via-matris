@@ -290,3 +290,10 @@ test('recados têm alternativa quando não há doações', async () => {
   criarStore({ permitir: pode }).apagarTudo();
   assert.deepEqual(recadosDaCasa(), [{ titulo: 'Recados da casa', texto: 'As doações recebidas aparecem aqui.' }]);
 });
+
+test('o modo offline é registrado antes do login', () => {
+  const fs = require('node:fs');
+  const ler = (f) => fs.readFileSync(require('node:path').join(__dirname, '..', 'js', f), 'utf8');
+  assert.ok(ler('login.js').includes('serviceWorker.register'));
+  assert.ok(!ler('app.js').includes('serviceWorker.register'));
+});

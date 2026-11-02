@@ -108,7 +108,7 @@ O mês vai sempre de **1 a 12** (nunca 0 a 11, como no `Date` do JavaScript).
 ## Integração com o front (já feita)
 
 - `index.html` carrega, nesta ordem: `utilitarios.js`, `dados.js`, `store.js`, `backup.js`, `acesso.js`, `login.js`. O `login.js` carrega o `app.js` depois da entrada.
-- O registro do `sw.js` fica no `app.js`, e não num `<script>` no HTML: a CSP do projeto bloqueia script inline.
+- O registro do `sw.js` fica no `login.js`, e não num `<script>` no HTML: a CSP do projeto bloqueia script inline. Ele roda antes do login, para a tela de acesso abrir sem internet.
 - O `store.js` não tem mais armazenamento próprio: lê e grava pelo `dados.js`. É ele que fornece `textoParaCentavos`, `centavosParaTexto` e `gerarCodigo`.
 - O backup fica em **Backup e sistema**, no menu do topo.
 

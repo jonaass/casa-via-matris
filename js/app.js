@@ -587,6 +587,4 @@
   document.addEventListener('visibilitychange', () => { if (!document.hidden) { conferirSessao(); atualizarData(); } });
 
   pedirArmazenamentoPersistente();
-  // Abre sem internet. Falha em silêncio onde service worker não é permitido (arquivo local).
-  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).catch(() => { });
 })();
