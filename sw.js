@@ -28,6 +28,8 @@ const ARQUIVOS = [
   'js/dados.js',
   'js/store.js',
   'js/backup.js',
+  'js/acesso.js',
+  'js/login.js',
   'js/app.js',
   'manifest.json',
   'icones/icone-192.png',
@@ -36,7 +38,7 @@ const ARQUIVOS = [
   'icones/icone-apple-180.png',
 ];
 
-// As fontes do front (Atkinson Hyperlegible e Bricolage Grotesque) vêm do Google Fonts.
+// As fontes do front (Atkinson Hyperlegible e Hanken Grotesk) vêm do Google Fonts.
 const SERVIDORES_DE_FONTES = ['fonts.googleapis.com', 'fonts.gstatic.com'];
 
 // Instalação: baixa todos os arquivos da versão nova. Se faltar um, a instalação falha

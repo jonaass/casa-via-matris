@@ -1,0 +1,225 @@
+/*
+ * login.js — a tela de acesso. As regras ficam no acesso.js.
+ *
+ * O app.js só é carregado depois da entrada: sem sessão, nada do painel é desenhado.
+ * Sair recarrega a página, o que limpa tudo o que estava na tela.
+ */
+(function () {
+  'use strict';
+
+  const $ = (id) => document.getElementById(id);
+  const form = $('form-acesso');
+  const TEMPO_ENTRADA = 900;
+
+  const MODOS = {
+    primeiro: {
+      titulo: 'Crie a conta do administrador',
+      apoio: 'É o primeiro acesso neste aparelho. Com esta conta, você cadastra as outras pessoas da equipe.',
+      campos: ['nome', 'email', 'nova', 'confirmar'],
+      botao: 'Criar conta',
+    },
+    entrar: {
+      titulo: 'Boas-vindas',
+      apoio: 'Entre para ver como está a casa hoje.',
+      campos: ['email', 'senha', 'opcoes'],
+      botao: 'Entrar',
+    },
+    esqueci: {
+      titulo: 'Recuperar o acesso',
+      apoio: 'Peça uma senha provisória ao administrador. Se você é o administrador, use o código de recuperação.',
+      campos: ['email', 'codigo', 'nova', 'confirmar'],
+      botao: 'Trocar senha',
+      voltar: 'Voltar para a entrada',
+    },
+    provisoria: {
+      titulo: 'Crie a sua senha',
+      apoio: 'A senha que você recebeu vale só para o primeiro acesso.',
+      campos: ['nova', 'confirmar'],
+      botao: 'Salvar senha e entrar',
+      voltar: 'Voltar para a entrada',
+    },
+    trocar: {
+      titulo: 'Trocar senha',
+      apoio: 'Confirme a senha atual e escolha uma nova.',
+      campos: ['senha', 'nova', 'confirmar'],
+      botao: 'Salvar nova senha',
+      voltar: 'Cancelar',
+    },
+  };
+
+  let modo = 'entrar';
+  let provisoria = null; // e-mail e senha digitados, guardados até a nova senha ser criada
+
+  function mostrarErro(msg) {
+    $('acesso-erro').textContent = msg;
+    if (!msg) return;
+    const miolo = $('acesso-miolo');
+    miolo.classList.remove('treme');
+    void miolo.offsetWidth; // reinicia a animação, mesmo com o mesmo erro duas vezes
+    miolo.classList.add('treme');
+  }
+
+  function irPara(novo) {
+    modo = novo;
+    const m = MODOS[novo];
+    $('acesso-titulo').textContent = m.titulo;
+    $('acesso-apoio').textContent = m.apoio;
+    $('a-enviar').textContent = m.botao;
+    $('a-voltar').hidden = !m.voltar;
+    $('a-voltar').textContent = m.voltar ?? '';
+    $('acesso-guardar').hidden = true;
+    form.hidden = false;
+    form.querySelectorAll('[data-campo]').forEach((bloco) => {
+      const visivel = m.campos.includes(bloco.dataset.campo);
+      bloco.hidden = !visivel;
+      bloco.querySelectorAll('input').forEach((c) => { c.disabled = !visivel; });
+    });
+    form.querySelectorAll('input:not([type=checkbox])').forEach((c) => {
+      if (c.id !== 'a-email' || novo === 'primeiro') c.value = '';
+      c.type = c.dataset.senha === undefined ? c.type : 'password';
+    });
+    form.querySelectorAll('.olho').forEach((b) => { b.setAttribute('aria-pressed', 'false'); b.setAttribute('aria-label', 'Mostrar senha'); });
+    mostrarErro('');
+    form.querySelector('input:not(:disabled):not([type=checkbox])')?.focus();
+  }
+
+  // Mostra o código de recuperação uma vez só; ele não fica guardado de forma legível.
+  function mostrarCodigo(codigo, depois) {
+    form.hidden = true;
+    $('a-voltar').hidden = true;
+    $('acesso-titulo').textContent = 'Guarde o código de recuperação';
+    $('acesso-apoio').textContent = 'Ele é a única forma de recuperar a conta do administrador se a senha for esquecida. Anote em papel e guarde em lugar seguro. Ele não aparece de novo.';
+    $('acesso-codigo').textContent = codigo;
+    $('acesso-guardar').hidden = false;
+    $('a-guardei').onclick = depois;
+    $('a-guardei').focus();
+  }
+
+  function abrirApp() {
+    const tela = $('tela-acesso');
+    const fim = () => {
+      tela.hidden = true;
+      tela.classList.remove('entrando');
+      document.querySelector('.app').hidden = false;
+      if (!document.getElementById('script-app')) {
+        const s = document.createElement('script');
+        s.id = 'script-app';
+        s.src = 'js/app.js';
+        document.body.append(s);
+      }
+    };
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) { fim(); return; }
+    tela.classList.add('entrando');
+    setTimeout(fim, TEMPO_ENTRADA);
+  }
+
+  async function enviar() {
+    const v = Object.fromEntries(new FormData(form));
+    const precisaNova = MODOS[modo].campos.includes('nova');
+    if (precisaNova && v.nova !== v.confirmar) { mostrarErro('As duas senhas não são iguais.'); $('a-confirmar').focus(); return; }
+
+    if (modo === 'primeiro') {
+      const r = await criarAdministrador({ nome: v.nome, email: v.email, senha: v.nova });
+      if (!r.ok) return mostrarErro(r.erro);
+      return mostrarCodigo(r.codigoRecuperacao, abrirApp);
+    }
+    if (modo === 'entrar') {
+      const manter = Boolean(v.manter);
+      const r = await entrar(v.email, v.senha, manter);
+      if (!r.ok) { $('a-senha').value = ''; $('a-senha').focus(); return mostrarErro(r.erro); }
+      if (r.trocarSenha) {
+        provisoria = { email: v.email, senha: v.senha, manter };
+        return irPara('provisoria');
+      }
+      return abrirApp();
+    }
+    if (modo === 'provisoria') {
+      const r = await trocarSenha(provisoria.email, provisoria.senha, v.nova, provisoria.manter);
+      if (!r.ok) return mostrarErro(r.erro);
+      provisoria = null;
+      return abrirApp();
+    }
+    if (modo === 'esqueci') {
+      const r = await recuperarSenha(v.email, v.codigo, v.nova);
+      if (!r.ok) return mostrarErro(r.erro);
+      return mostrarCodigo(r.codigoRecuperacao, abrirApp);
+    }
+    const r = await trocarSenha(contaAtual().email, v.senha, v.nova);
+    if (!r.ok) return mostrarErro(r.erro);
+    voltarAoApp('Senha trocada.');
+  }
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const botao = $('a-enviar');
+    if (botao.disabled) return;
+    botao.disabled = true;
+    const texto = botao.textContent;
+    botao.textContent = 'Aguarde…';
+    try {
+      await enviar();
+    } catch (erro) {
+      console.warn(erro);
+      mostrarErro('Não foi possível concluir. Tente de novo.');
+    }
+    botao.disabled = false;
+    if (botao.textContent === 'Aguarde…') botao.textContent = texto;
+  });
+
+  form.addEventListener('click', (e) => {
+    const olho = e.target.closest('.olho');
+    if (!olho) return;
+    const campo = olho.parentElement.querySelector('input');
+    const mostrar = campo.type === 'password';
+    campo.type = mostrar ? 'text' : 'password';
+    olho.setAttribute('aria-pressed', String(mostrar));
+    olho.setAttribute('aria-label', mostrar ? 'Esconder senha' : 'Mostrar senha');
+  });
+
+  $('a-esqueci').addEventListener('click', () => irPara('esqueci'));
+  $('a-voltar').addEventListener('click', () => {
+    if (modo === 'trocar') voltarAoApp();
+    else { provisoria = null; irPara('entrar'); }
+  });
+
+  function voltarAoApp(aviso) {
+    $('tela-acesso').hidden = true;
+    document.querySelector('.app').hidden = false;
+    if (aviso) window.dispatchEvent(new CustomEvent('acesso-aviso', { detail: aviso }));
+  }
+
+  window.abrirTrocaDeSenha = () => {
+    document.querySelector('.app').hidden = true;
+    $('tela-acesso').hidden = false;
+    irPara('trocar');
+  };
+
+  function desenharRecados() {
+    $('recados').replaceChildren(...recadosDaCasa().map(({ titulo, texto }) => {
+      const cartao = document.createElement('div');
+      cartao.className = 'vidro';
+      const forte = document.createElement('strong');
+      forte.textContent = titulo;
+      const linha = document.createElement('span');
+      linha.textContent = texto;
+      cartao.append(forte, linha);
+      return cartao;
+    }));
+  }
+
+  // ---------- início ----------
+
+  if (contaAtual()) {
+    abrirApp();
+    return;
+  }
+  desenharRecados();
+  $('tela-acesso').hidden = false;
+  if (!globalThis.crypto?.subtle) {
+    form.hidden = true;
+    $('acesso-titulo').textContent = 'Abra pelo endereço seguro';
+    $('acesso-apoio').textContent = 'Este navegador só permite entrar por um endereço https. Abra o site pelo link oficial.';
+    return;
+  }
+  irPara(temContas() ? 'entrar' : 'primeiro');
+})();

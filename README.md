@@ -3,11 +3,16 @@
 Projeto de extensão (ODS 10): sistema de controle de **estoque, doações e finanças**
 da Casa Via Matris. Funciona no navegador, instala no celular como um app e abre sem internet.
 
+## Versão 1.0
+
+Esta é a primeira versão que deixa de ser protótipo: tem tela de acesso e perfis. Os números 1.0.1 a 1.0.4
+usados antes eram do protótipo. As próximas versões seguem de 1.1.0 em diante.
+
 ## Versão no ar
 
 https://jonaass.github.io/casa-via-matris/ (atualiza sozinho a cada `git push` na branch `main`)
 
-Cada pessoa que abre vê os próprios dados de exemplo; o que uma registra não aparece para as outras.
+Cada aparelho tem as próprias contas e os próprios dados: o que uma pessoa registra não aparece em outro aparelho.
 
 ## Como abrir
 
@@ -25,7 +30,7 @@ Depois abra http://localhost:8000.
 Testes das regras de negócio (precisa do Node.js):
 
 ```bash
-node --test tests/store.test.js
+node --test tests/store.test.js tests/acesso.test.js
 ```
 
 ```bash
@@ -37,6 +42,8 @@ mesmo se eles falharem: confira a aba depois de enviar.
 
 ## O que já funciona
 
+- **Acesso**: entrada com e-mail e senha. O primeiro acesso no aparelho cria o administrador, que cadastra as outras pessoas com senha provisória. Cinco erros bloqueiam a conta por 15 minutos.
+- **Perfis**: Administrador (tudo), Financeiro (dinheiro), Almoxarifado (estoque e doações) e Voluntário (consulta o estoque e registra doações e saídas).
 - **Resumo do dia**: saldo em caixa, itens abaixo do mínimo, itens que vencem em até 15 dias e doações do mês.
 - **Despensa**: cada item tem uma barra de quantidade com um tracinho no estoque mínimo.
   Verde = suficiente, laranja = abaixo do mínimo, vermelho = acabou. Os itens mais
@@ -61,6 +68,8 @@ js/utilitarios.js   datas e quantidades no formato brasileiro
 js/dados.js         a única parte que lê e grava no aparelho
 js/store.js         as regras de negócio (o que pode ser gravado)
 js/backup.js        planilhas: baixar e restaurar
+js/acesso.js        contas, perfis, sessão e registro de atividades
+js/login.js         a tela de acesso
 js/app.js           a tela: desenha a página e responde aos cliques
 sw.js               guarda os arquivos para abrir sem internet
 manifest.json       nome e ícones do app instalado
@@ -113,6 +122,10 @@ Encontrados na revisão do protótipo. Os marcados como corrigidos têm teste em
 
 ### Para o uso hoje
 
+- **O login ainda não protege os dados**: sem back-end, ele controla quem usa o aparelho pela tela, mas não é um cofre. Os dados da casa seguem abertos no navegador, e quem souber usar as ferramentas do navegador consegue ler ou burlar as regras. A proteção real só vem com o servidor.
+- **Recados na tela de entrada**: mostram as doações de itens mais recentes antes do login, para quem estiver com o aparelho. Nunca mostram dinheiro, doadores nem observações.
+- **Contas por aparelho**: as contas não vão para outro aparelho nem para as planilhas. Quem abre primeiro um aparelho sem contas vira administrador.
+- **Código de recuperação**: é mostrado uma vez. Se o único administrador perder a senha e o código, o painel fica inacessível; só uma pessoa técnica recupera os dados pelo navegador.
 - **Privacidade (LGPD)**: os dados e as planilhas ficam em texto aberto, sem senha. Quem usar
   o aparelho consegue ler. Não registre nomes de pessoas acolhidas nem documentos, e guarde as
   planilhas em local protegido.
@@ -131,7 +144,7 @@ Encontrados na revisão do protótipo. Os marcados como corrigidos têm teste em
 
 - **Desfazer não pode apagar**: hoje o estorno remove o lançamento. Em finanças de uma ONG,
   o certo é um lançamento contrário (tipo `estorno`), mantendo o histórico para prestar contas.
-- **Quem fez cada lançamento**: falta login e o autor em cada movimento. Sem isso não há auditoria.
+- **Quem fez cada lançamento**: o aparelho guarda um registro de atividades, mas ele pode ser alterado por quem mexer no navegador. A auditoria confiável precisa ficar no servidor.
 - **Concorrência**: duas pessoas tirando o último café ao mesmo tempo passam na checagem e o
   estoque fica negativo. Use transação, ou
   `UPDATE itens SET quantidade = quantidade - ? WHERE id = ? AND quantidade >= ?`

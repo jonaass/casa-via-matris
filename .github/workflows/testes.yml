@@ -15,7 +15,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-      - run: node --test tests/store.test.js
+      - run: node --test tests/store.test.js tests/acesso.test.js
       - run: node tests/testar-miguel.js
 
       # Sem mudar a VERSAO, os celulares continuam com os arquivos antigos.

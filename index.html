@@ -6,26 +6,120 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Casa Via Matris | Gestão de recursos</title>
   <meta name="description"
-    content="Protótipo do sistema de controle de estoque, doações e finanças da Casa Via Matris.">
+    content="Sistema de controle de estoque, doações e finanças da Casa Via Matris.">
   <!-- CSP: só aceita scripts deste próprio site e fontes do Google. Barra injeção de script de terceiros. -->
   <meta http-equiv="Content-Security-Policy"
     content="default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; base-uri 'none'; form-action 'self'">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet"
-    href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&display=swap">
+    href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Hanken+Grotesk:wght@300;600&display=swap">
   <link rel="stylesheet" href="css/styles.css">
   <!-- Faz o site instalar no celular como um app (o registro do sw.js fica no app.js, porque a CSP bloqueia script inline). -->
   <link rel="manifest" href="manifest.json">
   <link rel="icon" href="icones/icone-192.png">
   <link rel="apple-touch-icon" href="icones/icone-apple-180.png">
-  <meta name="theme-color" content="#16443a">
+  <meta name="theme-color" content="#0c1219">
 </head>
 
 <body>
   <a class="pular" href="#conteudo">Pular para o conteúdo</a>
 
-  <div class="app">
+  <svg class="visualmente-oculto" aria-hidden="true">
+    <symbol id="icone-olho" viewBox="0 0 24 24">
+      <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
+      <circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.8" />
+    </symbol>
+  </svg>
+
+  <main class="acesso" id="tela-acesso" hidden>
+    <section class="acesso-coluna">
+      <div class="acesso-miolo" id="acesso-miolo">
+        <div class="marca">
+          <svg viewBox="0 0 40 40" aria-hidden="true" class="marca-icone">
+            <path d="M6 19 20 7l14 12v14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2Z" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round" />
+            <path d="M20 30s-6-3.6-6-8a3.2 3.2 0 0 1 6-1.6 3.2 3.2 0 0 1 6 1.6c0 4.4-6 8-6 8Z" fill="currentColor" />
+          </svg>
+          <div><strong>Casa Via Matris</strong></div>
+        </div>
+        <h1 id="acesso-titulo">Boas-vindas</h1>
+        <p class="acesso-apoio" id="acesso-apoio"></p>
+
+        <form id="form-acesso" novalidate>
+          <div class="campo" data-campo="nome">
+            <label for="a-nome">Seu nome</label>
+            <input id="a-nome" name="nome" autocomplete="name" maxlength="80">
+          </div>
+          <div class="campo" data-campo="email">
+            <label for="a-email">E-mail</label>
+            <input id="a-email" name="email" type="email" inputmode="email" autocomplete="username" maxlength="120" placeholder="nome@exemplo.com">
+          </div>
+          <div class="campo" data-campo="codigo">
+            <label for="a-codigo">Código de recuperação <span class="opcional">(só para administrador)</span></label>
+            <input id="a-codigo" name="codigo" autocomplete="off" autocapitalize="characters" maxlength="19" placeholder="XXXX-XXXX-XXXX-XXXX">
+          </div>
+            <div class="campo" data-campo="senha">
+              <label for="a-senha">Senha</label>
+              <div class="com-olho">
+                <input id="a-senha" name="senha" type="password" data-senha autocomplete="current-password" maxlength="128">
+                <button type="button" class="olho" aria-label="Mostrar senha" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#icone-olho" /></svg></button>
+              </div>
+            </div>
+            <div class="campo" data-campo="nova">
+              <label for="a-nova">Nova senha</label>
+              <div class="com-olho">
+                <input id="a-nova" name="nova" type="password" data-senha autocomplete="new-password" maxlength="128">
+                <button type="button" class="olho" aria-label="Mostrar senha" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#icone-olho" /></svg></button>
+              </div>
+            </div>
+            <div class="campo" data-campo="confirmar">
+              <label for="a-confirmar">Repita a nova senha</label>
+              <div class="com-olho">
+                <input id="a-confirmar" name="confirmar" type="password" data-senha autocomplete="new-password" maxlength="128">
+                <button type="button" class="olho" aria-label="Mostrar senha" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#icone-olho" /></svg></button>
+              </div>
+            </div>
+          <div class="acesso-opcoes" data-campo="opcoes">
+            <label class="marcar"><input type="checkbox" name="manter"><span>Manter conectado</span></label>
+            <button type="button" class="link" id="a-esqueci">Esqueci a senha</button>
+          </div>
+          <p class="erro" id="acesso-erro" role="alert"></p>
+          <button type="submit" class="botao" id="a-enviar">Entrar</button>
+        </form>
+
+        <div class="acesso-guardar" id="acesso-guardar" hidden>
+          <p class="acesso-codigo" id="acesso-codigo"></p>
+          <button type="button" class="botao" id="a-guardei">Já guardei o código</button>
+        </div>
+        <button type="button" class="link acesso-voltar" id="a-voltar" hidden></button>
+        <p class="acesso-nota">Os dados ficam só neste aparelho. Não registre nomes de pessoas acolhidas nem documentos.</p>
+      </div>
+    </section>
+
+    <aside class="acesso-cena" aria-label="Recados da casa">
+      <div class="ceu" aria-hidden="true"></div>
+      <div class="ceu ceu-2" aria-hidden="true"></div>
+      <svg class="paisagem" aria-hidden="true" viewBox="0 0 800 900" preserveAspectRatio="xMidYMax slice">
+        <circle class="lua" cx="620" cy="250" r="44" />
+        <path class="morro-longe" d="M0 640 C140 540 260 600 380 560 S640 480 800 590 V900 H0Z" />
+        <path class="morro-perto" d="M0 720 C160 650 320 700 440 680 S700 640 800 690 V900 H0Z" />
+        <g class="arvores">
+          <path d="M118 716 150 620l32 96Z" /><path d="M170 712 196 636l26 76Z" /><path d="M640 690 668 606l28 84Z" /><path d="M690 694 712 628l22 66Z" />
+        </g>
+        <g class="casa">
+          <rect class="parede" x="300" y="590" width="200" height="118" />
+          <path class="telhado" d="M280 594 400 508l120 86Z" />
+          <rect class="parede" x="452" y="520" width="24" height="52" />
+          <rect class="porta" x="382" y="636" width="38" height="72" rx="3" />
+          <rect class="janela" x="326" y="622" width="40" height="40" rx="3" />
+          <rect class="janela" x="436" y="622" width="40" height="40" rx="3" />
+        </g>
+      </svg>
+      <div class="vidros" id="recados"></div>
+    </aside>
+  </main>
+
+  <div class="app" hidden>
     <aside class="lateral">
       <div class="marca">
         <svg viewBox="0 0 40 40" aria-hidden="true" class="marca-icone">
@@ -44,10 +138,16 @@
         <a href="#despensa">Estoque</a>
         <a href="#registrar">Registrar</a>
         <a href="#historico">Histórico</a>
+        <a href="#usuarios" id="link-usuarios" hidden>Pessoas</a>
       </nav>
 
       <details class="lateral-rodape opcoes" id="opcoes">
-        <summary>Backup e sistema</summary>
+        <summary id="conta-resumo">Conta</summary>
+        <div class="opcoes-painel">
+        <p><strong id="conta-nome"></strong><br><span id="conta-perfil"></span></p>
+        <button type="button" class="botao-fantasma" id="conta-senha">Trocar senha</button>
+        <button type="button" class="botao-fantasma" id="conta-sair">Sair</button>
+        <div class="area-admin" id="area-admin" hidden>
         <p id="backup-quando"></p>
         <button type="button" class="botao-fantasma" id="backup-baixar">Baixar planilhas</button>
         <button type="button" class="botao-fantasma" id="backup-restaurar">Restaurar de planilhas</button>
@@ -63,7 +163,9 @@
             <button type="button" class="botao-fantasma" id="restaurar-nao">Cancelar</button>
           </div>
         </div>
+        </div>
         <p>Versão <span id="versao"></span></p>
+        </div>
       </details>
     </aside>
 
@@ -89,7 +191,7 @@
       </div>
 
       <section id="resumo" class="resumo" aria-label="Resumo do dia">
-        <div class="indicador">
+        <div class="indicador" id="kpi-saldo-bloco">
           <p class="indicador-titulo">Saldo em caixa</p>
           <p class="indicador-valor" id="kpi-saldo"></p>
           <p class="indicador-nota" id="kpi-saldo-nota"></p>
@@ -259,6 +361,30 @@
         <p class="vazio" id="historico-vazio" hidden>Nada registrado ainda. Use o formulário acima para lançar a
           primeira movimentação.</p>
       </section>
+
+      <section id="usuarios" class="painel" aria-labelledby="titulo-usuarios" hidden>
+        <div class="painel-cabeca">
+          <h2 id="titulo-usuarios">Pessoas com acesso</h2>
+          <p class="painel-ajuda">Cadastre quem usa o sistema neste aparelho. Cada perfil vê só o que precisa.</p>
+        </div>
+        <ul class="contas" id="lista-contas"></ul>
+        <div class="senha-gerada" id="senha-gerada" role="status" hidden>
+          <p id="senha-gerada-texto"></p>
+          <p class="acesso-codigo" id="senha-gerada-valor"></p>
+          <button type="button" class="botao-fantasma" id="senha-gerada-fechar">Já anotei</button>
+        </div>
+        <form id="form-conta" class="form-conta" novalidate>
+          <div class="campo"><label for="c-nome">Nome</label><input id="c-nome" name="nome" maxlength="80" autocomplete="off"></div>
+          <div class="campo"><label for="c-email">E-mail</label><input id="c-email" name="email" type="email" maxlength="120" autocomplete="off"></div>
+          <div class="campo"><label for="c-perfil">Perfil</label><select id="c-perfil" name="perfil"></select></div>
+          <button type="submit" class="botao">Cadastrar pessoa</button>
+          <p class="erro" id="erro-conta" role="alert"></p>
+        </form>
+        <details class="auditoria">
+          <summary>Registro de atividades</summary>
+          <ol id="lista-auditoria"></ol>
+        </details>
+      </section>
     </main>
   </div>
 
@@ -276,7 +402,9 @@
   <script src="js/dados.js"></script>
   <script src="js/store.js"></script>
   <script src="js/backup.js"></script>
-  <script src="js/app.js"></script>
+  <script src="js/acesso.js"></script>
+  <!-- O login.js carrega o app.js depois da entrada. -->
+  <script src="js/login.js"></script>
 </body>
 
 </html>

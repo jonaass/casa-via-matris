@@ -10,7 +10,8 @@
   'use strict';
 
   const { criarStore, TIPOS, CATEGORIAS, DIAS_ALERTA_VALIDADE } = window.ViaMatris;
-  const store = criarStore();
+  const store = criarStore({ permitir: pode });
+  const conta = contaAtual();
 
   const brl = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
   const DIAS_ENTRE_BACKUPS = 7;
@@ -228,7 +229,8 @@
     const detalhe = item
       ? `${textoDaQuantidade(mov.quantidade, item.unidade)} de ${item.nome}`
       : brl.format(mov.valorCentavos / 100);
-    avisar(`${textosPorTipo[tipo].feito}: ${detalhe}.`, mov.codigo);
+    avisar(`${textosPorTipo[tipo].feito}: ${detalhe}.`, pode('desfazer') ? mov.codigo : null);
+    registrarAuditoria(textosPorTipo[tipo].feito, detalhe);
 
     // Limpa os campos de conteúdo, mantendo tipo, item e data para lançamentos em sequência.
     ['f-quantidade', 'f-validade', 'f-valor', 'f-pessoa', 'f-descricao', 'f-novo-nome', 'f-novo-unidade'].forEach((id) => { $(id).value = ''; });
@@ -279,6 +281,7 @@
   $('aviso-desfazer').addEventListener('click', () => {
     if (!ultimoId) return;
     const r = store.estornar(ultimoId);
+    if (r.ok) registrarAuditoria('Desfez uma movimentação');
     atualizarTudo();
     avisar(r.ok ? 'Movimentação desfeita.' : r.erro);
   });
@@ -290,6 +293,7 @@
   function desenharHistorico() {
     const area = $('filtro-historico').value;
     const todos = store.movimentos()
+      .filter((m) => pode(`ver_${TIPOS[m.tipo].area}`))
       .filter((m) => !area || TIPOS[m.tipo].area === area)
       .sort((a, b) => b.data.localeCompare(a.data) || b.criadoEm.localeCompare(a.criadoEm));
     const movs = todos.slice(0, LIMITE_HISTORICO);
@@ -315,7 +319,7 @@
         el('td', {}, detalhe || '—'),
         el('td', {}, m.pessoa || '—'),
         el('td', { class: `num ${tipo.sinal > 0 ? 'positivo' : 'negativo'}` }, valor),
-        el('td', { class: 'acao' }, el('button', {
+        el('td', { class: 'acao' }, pode('desfazer') && el('button', {
           type: 'button',
           class: 'botao-fantasma',
           'data-codigo': m.codigo,
@@ -341,6 +345,7 @@
     }
     pedindoConfirmacao = null;
     const r = store.estornar(codigo);
+    if (r.ok) registrarAuditoria('Desfez uma movimentação');
     atualizarTudo();
     avisar(r.ok ? 'Movimentação desfeita.' : r.erro);
   });
@@ -385,6 +390,7 @@
   $('restaurar-sim').addEventListener('click', () => {
     const { fazer, feito } = CONFIRMACOES[confirmacao];
     const erro = fazer();
+    if (!erro) registrarAuditoria(feito);
     mostrarConfirmacao(null);
     atualizarTudo();
     avisar(erro ?? feito);
@@ -400,15 +406,17 @@
     $('backup-quando').textContent = quando;
 
     const temExemplos = store.temExemplos();
-    $('faixa-exemplo').hidden = !temExemplos;
+    $('faixa-exemplo').hidden = !temExemplos || !pode('administrar');
     // Exemplos não precisam de backup; dados reais sim, mesmo misturados a eles, e são a única cópia.
     const atrasado = !store.soExemplos() && store.movimentos().length > 0 && (dias === null || dias > DIAS_ENTRE_BACKUPS);
-    $('faixa-backup').hidden = !atrasado;
+    $('faixa-backup').hidden = !atrasado || !pode('administrar');
     $('faixa-backup-texto').textContent = `${quando} Os dados só existem neste aparelho: baixe as planilhas e guarde fora dele.`;
   }
 
   async function fazerBackup() {
+    if (!pode('administrar')) return;
     const r = await baixarTodasAsPlanilhas();
+    if (r.ok) registrarAuditoria('Baixou as planilhas');
     desenharBackup();
     avisar(r.ok ? 'Confira na pasta Downloads se chegaram as 3 planilhas e guarde-as fora deste aparelho.' : r.erros.join(' '));
   }
@@ -417,12 +425,14 @@
   $('faixa-backup-baixar').addEventListener('click', fazerBackup);
   $('backup-restaurar').addEventListener('click', () => $('backup-arquivo').click());
   $('backup-arquivo').addEventListener('change', async (e) => {
+    if (!pode('administrar')) return;
     const arquivos = [...e.target.files];
     e.target.value = ''; // permite escolher o mesmo arquivo de novo
     if (!arquivos.length) return;
 
     // Sem isso, os exemplos ficariam no lugar dos dados reais de mesmo código.
     const r = await restaurarArquivos(arquivos, () => { if (store.soExemplos()) store.apagarTudo(); });
+    if (r.ok) registrarAuditoria('Restaurou planilhas');
     atualizarTudo();
 
     const titulo = r.ok ? `${r.importados} registros restaurados, ${r.ignorados} já existiam.` : 'Nada foi restaurado.';
@@ -432,7 +442,7 @@
   });
 
   // Duas abas abertas: quando a outra salva, esta redesenha com o que está gravado.
-  aoMudarEmOutraAba(() => atualizarTudo());
+  aoMudarEmOutraAba(() => { conferirSessao(); atualizarTudo(); });
 
   let diaMostrado = null;
 
@@ -453,11 +463,117 @@
     ajustarCampos();
     desenharHistorico();
     desenharBackup();
+    desenharContas();
   }
+
+  // ---------- perfil e conta ----------
+
+  // Sessão vencida ou conta desativada: volta para o login, limpando a tela.
+  function conferirSessao() {
+    if (contaAtual()?.codigo !== conta?.codigo) location.reload();
+  }
+
+  // Esconder melhora a tela, mas quem barra de verdade são as regras no store.js e no acesso.js.
+  function aplicarPerfil() {
+    const verEstoque = pode('ver_estoque');
+    const verDinheiro = pode('ver_financeiro');
+    const admin = pode('administrar');
+    $('conta-resumo').textContent = conta.nome.split(' ')[0];
+    $('conta-nome').textContent = conta.nome;
+    $('conta-perfil').textContent = PERFIS[conta.perfil].rotulo;
+    $('area-admin').hidden = !admin;
+    $('kpi-saldo-bloco').hidden = !verDinheiro;
+    $('kpi-minimo-bloco').hidden = !verEstoque;
+    $('kpi-validade-bloco').hidden = !verEstoque;
+    $('resumo').dataset.blocos = String($('resumo').querySelectorAll('.indicador:not([hidden])').length);
+    $('despensa').hidden = !verEstoque;
+    $('historico').hidden = !pode('historico');
+    $('usuarios').hidden = !admin;
+    $('link-usuarios').hidden = !admin;
+    document.querySelector('.grade').classList.toggle('so-registro', !verEstoque);
+    document.querySelector('.lateral nav a[href="#despensa"]').hidden = !verEstoque;
+    document.querySelector('.lateral nav a[href="#historico"]').hidden = !pode('historico');
+    $('filtro-historico').closest('label').hidden = !(verEstoque && verDinheiro);
+
+    const opcoes = [...form.elements.tipo];
+    opcoes.forEach((r) => { r.disabled = !pode(r.value); r.closest('label').hidden = r.disabled; });
+    opcoes.find((r) => !r.disabled).checked = true;
+    $('f-enviar').closest('form').querySelector('.tipos').dataset.opcoes = String(opcoes.filter((r) => !r.disabled).length);
+  }
+
+  $('conta-sair').addEventListener('click', () => { sair(); location.reload(); });
+  $('conta-senha').addEventListener('click', () => { $('opcoes').open = false; abrirTrocaDeSenha(); });
+  window.addEventListener('acesso-aviso', (e) => avisar(e.detail));
+
+  // ---------- pessoas com acesso ----------
+
+  function mostrarSenhaGerada(pessoa, senha) {
+    $('senha-gerada-texto').textContent = `Senha provisória de ${pessoa}. Entregue pessoalmente. Ela não aparece de novo.`;
+    $('senha-gerada-valor').textContent = senha;
+    $('senha-gerada').hidden = false;
+    $('senha-gerada-fechar').focus();
+  }
+
+  function desenharContas() {
+    if (!pode('administrar')) return;
+    const opcoesPerfil = (atual) => Object.entries(PERFIS).map(([valor, p]) => el('option', { value: valor, selected: valor === atual }, p.rotulo));
+    $('lista-contas').replaceChildren(...listarContas().map((c) => el('li', { class: 'conta', 'data-codigo': c.codigo },
+      el('div', {},
+        el('strong', {}, c.nome),
+        el('span', {}, c.email),
+        c.bloqueada && el('span', { class: 'etiqueta saida_item' }, 'Bloqueada'),
+        c.provisoria && el('span', { class: 'etiqueta doacao_item' }, 'Senha provisória'),
+        !c.ativo && el('span', { class: 'etiqueta saida_item' }, 'Desativada')),
+      el('div', { class: 'conta-acoes' },
+        el('label', {}, el('span', { class: 'visualmente-oculto' }, `Perfil de ${c.nome}`), el('select', { 'data-acao': 'perfil' }, opcoesPerfil(c.perfil))),
+        c.codigo !== conta.codigo && el('button', { type: 'button', class: 'botao-fantasma', 'data-acao': 'senha' }, 'Gerar senha'),
+        c.codigo !== conta.codigo && el('button', { type: 'button', class: 'botao-fantasma', 'data-acao': 'ativo' }, c.ativo ? 'Desativar' : 'Ativar')))));
+    $('lista-auditoria').replaceChildren(...lerAuditoria().slice(0, 50).map((l) => el('li', {},
+      el('time', { datetime: l.quando }, new Date(l.quando).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })),
+      ` ${[l.quem, l.acao, l.detalhe].filter(Boolean).join(': ')}`)));
+  }
+
+  $('c-perfil').replaceChildren(...Object.entries(PERFIS).map(([valor, p]) => el('option', { value: valor }, p.rotulo)));
+  $('senha-gerada-fechar').addEventListener('click', () => { $('senha-gerada').hidden = true; });
+
+  $('form-conta').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const dados = Object.fromEntries(new FormData(e.target));
+    const r = await criarConta(dados);
+    $('erro-conta').textContent = r.ok ? '' : r.erro;
+    if (!r.ok) return;
+    e.target.reset();
+    desenharContas();
+    mostrarSenhaGerada(dados.nome, r.senhaProvisoria);
+  });
+
+  $('lista-contas').addEventListener('click', async (e) => {
+    const acao = e.target.closest('button[data-acao]')?.dataset.acao;
+    if (!acao) return;
+    const codigo = e.target.closest('.conta').dataset.codigo;
+    const pessoa = listarContas().find((c) => c.codigo === codigo);
+    if (acao === 'senha') {
+      const r = await redefinirSenhaDe(codigo);
+      desenharContas();
+      if (r.ok) mostrarSenhaGerada(pessoa.nome, r.senhaProvisoria); else avisar(r.erro);
+      return;
+    }
+    const r = alterarConta(codigo, { ativo: !pessoa.ativo });
+    if (!r.ok) avisar(r.erro);
+    desenharContas();
+  });
+
+  $('lista-contas').addEventListener('change', (e) => {
+    if (e.target.dataset.acao !== 'perfil') return;
+    const r = alterarConta(e.target.closest('.conta').dataset.codigo, { perfil: e.target.value });
+    if (!r.ok) avisar(r.erro);
+    desenharContas();
+  });
 
   // Garante o idioma certo para leitores de tela também quando a página é hospedada dentro de outra estrutura.
   document.documentElement.lang = 'pt-BR';
   $('versao').textContent = VERSAO;
+  aplicarPerfil();
   atualizarData();
 
   // O navegador da Samsung gera o próprio pacote do app, e o Play Protect do Android bloqueia
@@ -468,7 +584,7 @@
     `S.browser_fallback_url=${encodeURIComponent(location.href)};end`;
 
   // No celular o app volta do segundo plano sem recarregar, às vezes dias depois.
-  document.addEventListener('visibilitychange', () => { if (!document.hidden) atualizarData(); });
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) { conferirSessao(); atualizarData(); } });
 
   pedirArmazenamentoPersistente();
   // Abre sem internet. Falha em silêncio onde service worker não é permitido (arquivo local).

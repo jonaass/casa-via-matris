@@ -159,7 +159,10 @@
 
   // ---------- store ----------
 
-  function criarStore() {
+  // Sem perfil de acesso (nos testes das regras), tudo é permitido.
+  function criarStore({ permitir = () => true } = {}) {
+    const NEGADO = 'Seu perfil não pode fazer isso.';
+
     // Primeira abertura neste aparelho: mostra exemplos para a tela não abrir vazia.
     // Depois disso nunca mais, senão apagar tudo faria os exemplos voltarem.
     if (!lerConfig().iniciado) {
@@ -251,6 +254,7 @@
     function registrar(entrada) {
       const tipo = TIPOS[entrada.tipo];
       if (!tipo) return falha('Escolha o que aconteceu.');
+      if (!permitir(entrada.tipo)) return falha(NEGADO);
 
       const hoje = dataDeHoje();
       const data = entrada.data || hoje;
@@ -301,6 +305,7 @@
     function estornar(codigo) {
       const mov = [...movimentosDeEstoque(), ...movimentosDeDinheiro()].find((m) => m.codigo === codigo);
       if (!mov) return falha('Essa movimentação não existe mais.');
+      if (!permitir('desfazer') || !permitir(`ver_${TIPOS[mov.tipo].area}`)) return falha(NEGADO);
 
       if (TIPOS[mov.tipo].area === 'estoque') {
         const r = estornarEstoque(mov);
@@ -352,8 +357,9 @@
       registrar,
       estornar,
       resumo,
-      restaurarExemplo: () => gravarColecoes(dadosDeExemplo()),
+      restaurarExemplo: () => (permitir('administrar') ? gravarColecoes(dadosDeExemplo()) : NEGADO),
       apagarTudo: () => {
+        if (!permitir('administrar')) return NEGADO;
         const erro = gravarColecoes({ itens: [], doacoes: [], dinheiro: [] });
         // O backup antigo não tem o que for lançado daqui em diante: o aviso precisa voltar a contar.
         if (!erro) salvarConfig({ ultimoBackup: {} });
