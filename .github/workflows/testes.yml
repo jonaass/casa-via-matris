@@ -25,7 +25,7 @@ jobs:
           ANTES: ${{ github.event.before }}
         run: |
           if git diff --name-only "$ANTES" HEAD | grep -qE '^(index\.html|manifest\.json|sw\.js|css/|js/|icones/)' \
-            && ! git diff "$ANTES" HEAD -- js/dados.js | grep -q '^[-+]const VERSAO'; then
+            && ! git diff "$ANTES" HEAD -- js/dados.js | grep -qE '^[-+][[:space:]]*const VERSAO'; then
             echo "::error::O app mudou, mas a VERSAO em js/dados.js não. Mude a VERSAO para os celulares atualizarem."
             exit 1
           fi
