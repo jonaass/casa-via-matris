@@ -9,11 +9,13 @@
 (function () {
   'use strict';
 
-  const { criarStore, TIPOS, CATEGORIAS, DIAS_ALERTA_VALIDADE } = window.ViaMatris;
+  const { criarStore, TIPOS, CATEGORIAS, DIAS_ALERTA_VALIDADE, DOADOR_ANONIMO } = window.ViaMatris;
   const store = criarStore({ permitir: pode });
   const conta = contaAtual();
 
   const brl = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+  const brlCurto = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', notation: 'compact', maximumFractionDigits: 1, minimumFractionDigits: 0 });
+  const SVG = 'http://www.w3.org/2000/svg';
   const DIAS_ENTRE_BACKUPS = 7;
 
   const $ = (id) => document.getElementById(id);
@@ -53,8 +55,151 @@
       : 'Nenhum item perto de vencer';
     $('kpi-validade-bloco').classList.toggle('atencao', r.vencendo.length > 0);
 
-    $('kpi-doacoes').textContent = r.doacoesItens + r.doacoesDinheiro;
-    $('kpi-doacoes-nota').textContent = `${r.doacoesItens} de itens, ${r.doacoesDinheiro} em dinheiro`;
+    // Cada perfil conta só as doações da própria área: o almoxarifado não fica sabendo do dinheiro.
+    const verItens = pode('ver_estoque');
+    const verDinheiro = pode('ver_financeiro');
+    const itens = verItens ? r.doacoesItens : 0;
+    const dinheiro = verDinheiro ? r.doacoesDinheiro : 0;
+    $('kpi-doacoes').textContent = itens + dinheiro;
+    $('kpi-doacoes-nota').textContent = verItens && verDinheiro
+      ? `${itens} de itens, ${dinheiro} em dinheiro`
+      : verItens ? `${itens === 1 ? 'doação' : 'doações'} de itens` : `${dinheiro === 1 ? 'entrada' : 'entradas'} de dinheiro`;
+  }
+
+  // ---------- gráfico de entradas e saídas ----------
+
+  /*
+   * Barras agrupadas por mês, desenhadas em SVG à mão (sem biblioteca: a CSP só aceita scripts
+   * deste site, e o app precisa abrir sem internet). Um eixo só, em reais.
+   * Cores: azul = entrou, laranja = saiu. Verde e vermelho se confundem para quem tem
+   * daltonismo; este par passou na checagem de cores. A legenda e a tabela garantem
+   * que a informação nunca depende só da cor.
+   */
+  function svg(tag, atributos = {}, ...filhos) {
+    const no = document.createElementNS(SVG, tag);
+    for (const [chave, valor] of Object.entries(atributos)) no.setAttribute(chave, valor);
+    no.append(...filhos);
+    return no;
+  }
+
+  // Coluna com só o topo arredondado (raio 4): a base fica reta, presa no eixo.
+  function barra(x, y, largura, altura, classe) {
+    if (altura <= 0) return null;
+    const r = Math.min(4, largura / 2, altura);
+    return svg('path', {
+      class: classe,
+      d: `M${x},${y + altura}V${y + r}Q${x},${y} ${x + r},${y}H${x + largura - r}Q${x + largura},${y} ${x + largura},${y + r}V${y + altura}Z`,
+    });
+  }
+
+  // Um teto "redondo" para o eixo: 1.000, 2.000, 2.500, 5.000...
+  function tetoDoEixo(maior) {
+    if (maior <= 0) return 100000;
+    const potencia = 10 ** Math.floor(Math.log10(maior));
+    const passo = [1, 2, 2.5, 5, 10].map((f) => f * potencia).find((v) => v >= maior / 4);
+    return passo * 4;
+  }
+
+  const nomeMesCurto = (m) => new Date(m.ano, m.mes - 1, 1).toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '');
+
+  function desenharGrafico() {
+    if (!pode('ver_financeiro')) return;
+    const meses = store.fluxoMensal(6);
+    const vazio = meses.every((m) => !m.entradas && !m.saidas);
+    $('grafico-vazio').hidden = !vazio;
+    $('grafico').hidden = vazio;
+    $('grafico-mes-atual').hidden = vazio;
+
+    $('corpo-grafico').replaceChildren(...meses.slice().reverse().map((m) => {
+      const resultado = m.entradas - m.saidas;
+      return el('tr', {},
+        el('th', { scope: 'row' }, nomeDoMes(m.mes, m.ano)),
+        el('td', { class: 'num' }, brl.format(m.entradas / 100)),
+        el('td', { class: 'num' }, brl.format(m.saidas / 100)),
+        el('td', { class: `num ${resultado < 0 ? 'negativo' : resultado > 0 ? 'positivo' : ''}` },
+          `${resultado > 0 ? '+' : resultado < 0 ? '−' : ''}${brl.format(Math.abs(resultado) / 100)}`));
+    }));
+    if (vazio) return;
+
+    const largura = Math.max(280, $('grafico').clientWidth || 600);
+    const altura = 240;
+    const margem = { topo: 24, direita: 8, baixo: 30, esquerda: largura < 420 ? 52 : 64 };
+    const areaL = largura - margem.esquerda - margem.direita;
+    const areaA = altura - margem.topo - margem.baixo;
+    const teto = tetoDoEixo(Math.max(...meses.flatMap((m) => [m.entradas, m.saidas])));
+    const y = (v) => margem.topo + areaA - (v / teto) * areaA;
+    const coluna = areaL / meses.length;
+    const larguraBarra = Math.min(28, coluna * 0.3);
+
+    const grade = [0, 1, 2, 3, 4].map((i) => {
+      const v = (teto / 4) * i;
+      return svg('g', { class: i === 0 ? 'eixo-base' : 'eixo-grade' },
+        svg('line', { x1: margem.esquerda, x2: largura - margem.direita, y1: y(v), y2: y(v) }),
+        svg('text', { x: margem.esquerda - 8, y: y(v) + 4, 'text-anchor': 'end' }, brlCurto.format(v / 100)));
+    });
+
+    const grupos = meses.map((m, i) => {
+      const centro = margem.esquerda + coluna * i + coluna / 2;
+      const xEntrada = centro - larguraBarra - 1; // 2 px de folga entre as duas barras
+      const xSaida = centro + 1;
+      const atual = i === meses.length - 1;
+      const resultado = m.entradas - m.saidas;
+      const rotulo = `${nomeDoMes(m.mes, m.ano)}: entrou ${brl.format(m.entradas / 100)}, saiu ${brl.format(m.saidas / 100)}, ` +
+        `resultado ${resultado < 0 ? 'negativo de ' : ''}${brl.format(Math.abs(resultado) / 100)}.`;
+      return svg('g', { class: 'mes', tabindex: '0', role: 'img', 'aria-label': rotulo, 'data-indice': String(i) },
+        // Área de toque maior que as barras: o mês inteiro responde ao dedo e ao mouse.
+        svg('rect', { class: 'mes-fundo', x: margem.esquerda + coluna * i, y: margem.topo, width: coluna, height: areaA }),
+        ...[barra(xEntrada, y(m.entradas), larguraBarra, y(0) - y(m.entradas), 'barra-entrada'),
+          barra(xSaida, y(m.saidas), larguraBarra, y(0) - y(m.saidas), 'barra-saida')].filter(Boolean),
+        svg('text', { class: atual ? 'mes-nome atual' : 'mes-nome', x: centro, y: altura - 8, 'text-anchor': 'middle' }, nomeMesCurto(m)));
+    });
+
+    const desenho = svg('svg', { width: largura, height: altura, viewBox: `0 0 ${largura} ${altura}`, 'aria-label': 'Entradas e saídas de dinheiro nos últimos 6 meses', role: 'group' },
+      ...grade, ...grupos);
+    $('grafico').replaceChildren(desenho);
+    graficoMeses = meses;
+    // O mês atual, escrito por extenso: é a pergunta mais comum ("como estamos este mês?").
+    const agora = meses[meses.length - 1];
+    $('grafico-mes-atual').textContent = `${nomeDoMes(agora.mes, agora.ano)}, até hoje: entrou ${brl.format(agora.entradas / 100)} e saiu ${brl.format(agora.saidas / 100)}.`;
+  }
+
+  let graficoMeses = [];
+
+  function mostrarDica(grupo) {
+    const m = graficoMeses[Number(grupo.dataset.indice)];
+    if (!m) return;
+    const dica = $('grafico-dica');
+    const resultado = m.entradas - m.saidas;
+    dica.replaceChildren(
+      el('strong', {}, nomeDoMes(m.mes, m.ano)),
+      el('span', {}, el('span', { class: 'amostra entrada', 'aria-hidden': 'true' }), `Entrou ${brl.format(m.entradas / 100)}`),
+      el('span', {}, el('span', { class: 'amostra saida', 'aria-hidden': 'true' }), `Saiu ${brl.format(m.saidas / 100)}`),
+      el('span', { class: 'dica-resultado' }, `Resultado: ${resultado < 0 ? '−' : resultado > 0 ? '+' : ''}${brl.format(Math.abs(resultado) / 100)}`));
+    dica.hidden = false;
+    // Posiciona ao lado do mês, sem sair da área do gráfico.
+    const caixa = $('grafico').getBoundingClientRect();
+    const alvo = grupo.querySelector('.mes-fundo').getBoundingClientRect();
+    const esquerda = alvo.left - caixa.left + alvo.width / 2 - dica.offsetWidth / 2;
+    dica.style.left = `${Math.max(0, Math.min(esquerda, caixa.width - dica.offsetWidth))}px`;
+    $('grafico').querySelectorAll('.mes').forEach((g) => g.classList.toggle('ativo', g === grupo));
+  }
+
+  function esconderDica() {
+    $('grafico-dica').hidden = true;
+    $('grafico').querySelectorAll('.mes.ativo').forEach((g) => g.classList.remove('ativo'));
+  }
+
+  $('grafico').addEventListener('pointerover', (e) => { const g = e.target.closest('.mes'); if (g) mostrarDica(g); });
+  $('grafico').addEventListener('pointerleave', esconderDica);
+  $('grafico').addEventListener('focusin', (e) => { const g = e.target.closest('.mes'); if (g) mostrarDica(g); });
+  $('grafico').addEventListener('focusout', esconderDica);
+  // Redesenha quando a largura muda (girar o celular, abrir o painel).
+  if ('ResizeObserver' in window) {
+    let larguraAnterior = 0;
+    new ResizeObserver(([entrada]) => {
+      const nova = Math.round(entrada.contentRect.width);
+      if (nova && nova !== larguraAnterior) { larguraAnterior = nova; desenharGrafico(); }
+    }).observe($('grafico'));
   }
 
   // ---------- despensa ----------
@@ -156,6 +301,8 @@
     const t = textosPorTipo[tipo];
     // Deixa claro o que pode ficar em branco, para ninguém travar num campo que não é obrigatório.
     $('r-pessoa').replaceChildren(t.pessoa, ' ', el('span', { class: 'opcional' }, '(se quiser)'));
+    $('f-pessoa-dica').hidden = tipo !== 'entrada_dinheiro';
+    $('f-pessoa').placeholder = tipo === 'entrada_dinheiro' ? DOADOR_ANONIMO : '';
     $('r-descricao').replaceChildren(t.descricao, t.descricaoOpcional ? ' ' : '', t.descricaoOpcional ? el('span', { class: 'opcional' }, '(se quiser)') : '');
     $('f-enviar').textContent = t.botao;
     const item = store.item($('f-item').value);
@@ -196,6 +343,8 @@
 
   form.addEventListener('submit', (evento) => {
     evento.preventDefault();
+    // Sessão vencida com a página aberta: volta para a entrada, em vez de dizer "seu perfil não pode".
+    if (conferirSessao()) return;
     const tipo = tipoAtual();
     const dados = Object.fromEntries(new FormData(form));
     const entrada = {
@@ -279,7 +428,7 @@
   $('aviso-fechar').addEventListener('click', fecharAviso);
 
   $('aviso-desfazer').addEventListener('click', () => {
-    if (!ultimoId) return;
+    if (!ultimoId || conferirSessao()) return;
     const r = store.estornar(ultimoId);
     if (r.ok) registrarAuditoria('Desfez uma movimentação');
     atualizarTudo();
@@ -290,16 +439,39 @@
 
   const LIMITE_HISTORICO = 50;
 
+  // Os meses que aparecem no filtro são os que têm algo que esta pessoa pode ver.
+  function preencherMeses(visiveis) {
+    const select = $('filtro-mes');
+    const anterior = select.value;
+    const meses = [...new Set(visiveis.map((m) => m.data.slice(0, 7)))].sort().reverse();
+    select.replaceChildren(el('option', { value: '' }, 'Todos os meses'),
+      ...meses.map((chave) => el('option', { value: chave }, nomeDoMes(Number(chave.slice(5)), Number(chave.slice(0, 4))))));
+    select.value = meses.includes(anterior) ? anterior : '';
+  }
+
   function desenharHistorico() {
+    if (!pode('historico')) return;
     const area = $('filtro-historico').value;
-    const todos = store.movimentos()
-      .filter((m) => pode(`ver_${TIPOS[m.tipo].area}`))
+    const visiveis = store.movimentos().filter((m) => pode(`ver_${TIPOS[m.tipo].area}`));
+    preencherMeses(visiveis);
+    const mes = $('filtro-mes').value;
+    const todos = visiveis
       .filter((m) => !area || TIPOS[m.tipo].area === area)
+      .filter((m) => !mes || m.data.startsWith(mes))
       .sort((a, b) => b.data.localeCompare(a.data) || b.criadoEm.localeCompare(a.criadoEm));
     const movs = todos.slice(0, LIMITE_HISTORICO);
     // Sem este aviso, a movimentação mais antiga some da tabela e parece ter sido apagada.
     $('historico-limite').hidden = todos.length <= LIMITE_HISTORICO;
-    $('historico-limite').textContent = `Mostrando as ${LIMITE_HISTORICO} mais recentes de ${todos.length} movimentações.`;
+    $('historico-limite').textContent = `Mostrando as ${LIMITE_HISTORICO} mais recentes de ${todos.length} movimentações. Escolha um mês para ver as outras.`;
+
+    // Com um mês escolhido, mostra o total dele: é a conta que a prestação de contas pede.
+    const nomeMes = mes ? nomeDoMes(Number(mes.slice(5)), Number(mes.slice(0, 4))) : '';
+    const partes = [`${todos.length} ${todos.length === 1 ? 'movimentação' : 'movimentações'}${mes ? ` em ${nomeMes}` : ''}`];
+    if (mes && pode('ver_financeiro') && area !== 'estoque') {
+      const soma = (tipo) => todos.filter((m) => m.tipo === tipo).reduce((t, m) => t + m.valorCentavos, 0);
+      partes.push(`entrou ${brl.format(soma('entrada_dinheiro') / 100)}, saiu ${brl.format(soma('saida_dinheiro') / 100)}`);
+    }
+    $('historico-total').textContent = `${partes.join(': ')}.`;
 
     const itens = new Map(store.itens().map((i) => [i.codigo, i]));
     $('corpo-historico').replaceChildren(...movs.map((m) => {
@@ -313,12 +485,13 @@
         ? [item?.nome ?? '(item apagado)', m.descricao].filter(Boolean).join(': ')
         : m.descricao;
 
+      // data-rotulo: no celular a tabela vira cartões, e cada valor ganha o nome da coluna.
       return el('tr', {},
-        el('td', {}, el('time', { datetime: m.data }, dataCurta(m.data))),
-        el('td', {}, el('span', { class: `etiqueta ${m.tipo}` }, tipo.rotulo)),
-        el('td', {}, detalhe || '—'),
-        el('td', {}, m.pessoa || '—'),
-        el('td', { class: `num ${tipo.sinal > 0 ? 'positivo' : 'negativo'}` }, valor),
+        el('td', { 'data-rotulo': 'Data' }, el('time', { datetime: m.data }, dataCurta(m.data))),
+        el('td', { 'data-rotulo': 'Movimento' }, el('span', { class: `etiqueta ${m.tipo}` }, tipo.rotulo)),
+        el('td', { 'data-rotulo': 'Detalhe' }, detalhe || '—'),
+        el('td', { 'data-rotulo': 'Quem' }, m.pessoa || '—'),
+        el('td', { 'data-rotulo': 'Quantidade ou valor', class: `num ${tipo.sinal > 0 ? 'positivo' : 'negativo'}` }, valor),
         el('td', { class: 'acao' }, pode('desfazer') && el('button', {
           type: 'button',
           class: 'botao-fantasma',
@@ -327,6 +500,9 @@
         }, pedindoConfirmacao === m.codigo ? 'Confirmar' : 'Desfazer')));
     }));
     $('historico-vazio').hidden = movs.length > 0;
+    $('historico-vazio').textContent = visiveis.length
+      ? 'Nada encontrado com esses filtros. Troque o mês ou o tipo de movimento.'
+      : 'Nada registrado ainda. Use a página Registrar para lançar a primeira movimentação.';
   }
 
   // Dois toques: o primeiro pede confirmação na própria linha, o segundo desfaz.
@@ -334,7 +510,7 @@
 
   $('corpo-historico').addEventListener('click', (e) => {
     const botao = e.target.closest('button[data-codigo]');
-    if (!botao) return;
+    if (!botao || conferirSessao()) return;
     const codigo = botao.dataset.codigo;
 
     if (pedindoConfirmacao !== codigo) {
@@ -356,6 +532,7 @@
   document.querySelectorAll('input[name="categoria"]').forEach((r) =>
     r.addEventListener('change', (e) => { filtro.categoria = e.target.value; desenharDespensa(); }));
   $('filtro-historico').addEventListener('change', desenharHistorico);
+  $('filtro-mes').addEventListener('change', desenharHistorico);
 
   // ---------- apagar tudo ----------
 
@@ -459,6 +636,7 @@
 
   function atualizarTudo() {
     desenharResumo();
+    desenharGrafico();
     desenharDespensa();
     ajustarCampos();
     desenharHistorico();
@@ -470,7 +648,9 @@
 
   // Sessão vencida ou conta desativada: volta para o login, limpando a tela.
   function conferirSessao() {
-    if (contaAtual()?.codigo !== conta?.codigo) location.reload();
+    if (contaAtual()?.codigo === conta?.codigo) return false;
+    location.reload();
+    return true;
   }
 
   // Esconder melhora a tela, mas quem barra de verdade são as regras no store.js e no acesso.js.
@@ -485,21 +665,63 @@
     $('kpi-saldo-bloco').hidden = !verDinheiro;
     $('kpi-minimo-bloco').hidden = !verEstoque;
     $('kpi-validade-bloco').hidden = !verEstoque;
+    $('grafico-bloco').hidden = !verDinheiro;
     $('resumo').dataset.blocos = String($('resumo').querySelectorAll('.indicador:not([hidden])').length);
-    $('despensa').hidden = !verEstoque;
-    $('historico').hidden = !pode('historico');
-    $('usuarios').hidden = !admin;
-    $('link-usuarios').hidden = !admin;
-    document.querySelector('.grade').classList.toggle('so-registro', !verEstoque);
-    document.querySelector('.lateral nav a[href="#despensa"]').hidden = !verEstoque;
-    document.querySelector('.lateral nav a[href="#historico"]').hidden = !pode('historico');
-    $('filtro-historico').closest('label').hidden = !(verEstoque && verDinheiro);
+    // O saldo leva ao histórico; quem não tem histórico vê o número, mas sem link.
+    if (!pode('historico')) $('kpi-saldo-bloco').removeAttribute('href');
+    document.querySelectorAll('.lateral nav a[data-pagina]').forEach((a) => { a.hidden = !podeVerPagina(a.dataset.pagina); });
+    $('filtro-area-rotulo').hidden = !(verEstoque && verDinheiro);
 
     const opcoes = [...form.elements.tipo];
     opcoes.forEach((r) => { r.disabled = !pode(r.value); r.closest('label').hidden = r.disabled; });
     opcoes.find((r) => !r.disabled).checked = true;
-    $('f-enviar').closest('form').querySelector('.tipos').dataset.opcoes = String(opcoes.filter((r) => !r.disabled).length);
+    form.querySelector('.tipos').dataset.opcoes = String(opcoes.filter((r) => !r.disabled).length);
   }
+
+  // ---------- páginas ----------
+
+  /*
+   * Cada página tem o próprio endereço (#/estoque, #/historico...). Assim o botão Voltar do
+   * celular funciona, e dá para salvar o atalho de uma página. As permissões ficam no acesso.js.
+   */
+  const ENDERECOS_ANTIGOS = { resumo: 'inicio', despensa: 'estoque', usuarios: 'acessos', conteudo: 'inicio' };
+
+  function paginaDoEndereco() {
+    let nome = location.hash.replace(/^#\/?/, '');
+    try { nome = decodeURIComponent(nome); } catch (e) { return 'nao-encontrada'; } // endereço malformado, como #/%E0
+    nome = nome || 'inicio';
+    return ENDERECOS_ANTIGOS[nome] ?? nome;
+  }
+
+  function mostrarPagina({ focar = true } = {}) {
+    if (conferirSessao()) return;
+    let pagina = paginaDoEndereco();
+    if (!Object.prototype.hasOwnProperty.call(PAGINAS, pagina)) pagina = 'nao-encontrada';
+    else if (!podeVerPagina(pagina)) {
+      $('sem-permissao-texto').textContent = `A página ${PAGINAS[pagina].rotulo} não faz parte do perfil ${PERFIS[conta.perfil].rotulo}. ` +
+        'Se você precisa dela, peça ao administrador.';
+      pagina = 'sem-permissao';
+    }
+    document.querySelectorAll('.pagina').forEach((secao) => { secao.hidden = secao.dataset.pagina !== pagina; });
+    document.querySelectorAll('.lateral nav a[data-pagina]').forEach((a) => {
+      if (a.dataset.pagina === pagina) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
+    });
+    // No celular o menu rola para o lado: mantém a página aberta à vista.
+    document.querySelector('.lateral nav a[aria-current]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    const titulo = document.querySelector(`.pagina[data-pagina="${pagina}"] h1`);
+    document.title = `${pagina === 'inicio' ? 'Visão geral' : titulo.textContent} | Casa Via Matris`;
+    if (pagina === 'inicio') desenharGrafico(); // a largura só existe com a página visível
+    // Leva o foco ao título: o leitor de tela anuncia a página nova, como num site comum.
+    if (focar) { window.scrollTo(0, 0); titulo.focus({ preventScroll: true }); }
+  }
+
+  window.addEventListener('hashchange', () => mostrarPagina());
+
+  // "Pular para o conteúdo" leva ao título da página aberta, sem trocar de página.
+  document.querySelector('.pular').addEventListener('click', (e) => {
+    e.preventDefault();
+    document.querySelector('.pagina:not([hidden]) h1')?.focus();
+  });
 
   $('conta-sair').addEventListener('click', () => { sair(); location.reload(); });
   $('conta-senha').addEventListener('click', () => { $('opcoes').open = false; abrirTrocaDeSenha(); });
@@ -531,6 +753,26 @@
     $('lista-auditoria').replaceChildren(...lerAuditoria().slice(0, 50).map((l) => el('li', {},
       el('time', { datetime: l.quando }, new Date(l.quando).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })),
       ` ${[l.quem, l.acao, l.detalhe].filter(Boolean).join(': ')}`)));
+  }
+
+  // Tabela "o que cada perfil vê", montada das mesmas listas que as regras usam: nunca fica desatualizada.
+  function desenharMatriz() {
+    const linhas = [
+      ['Visão geral', (p) => true],
+      ['Saldo, gráfico e histórico do dinheiro', (p) => p.pode.includes('ver_financeiro')],
+      ['Registrar entradas e despesas', (p) => p.pode.includes('entrada_dinheiro')],
+      ['Estoque e validades', (p) => p.pode.includes('ver_estoque')],
+      ['Registrar doações e saídas de itens', (p) => p.pode.includes('doacao_item')],
+      ['Histórico', (p) => p.pode.includes('historico')],
+      ['Desfazer movimentações', (p) => p.pode.includes('desfazer')],
+      ['Acessos, backup e registro de atividades', (p) => p.pode.includes('administrar')],
+    ];
+    const perfis = Object.values(PERFIS);
+    $('matriz-cabeca').replaceChildren(el('tr', {}, el('th', { scope: 'col' }, 'O que'), ...perfis.map((p) => el('th', { scope: 'col' }, p.rotulo))));
+    $('matriz-corpo').replaceChildren(...linhas.map(([texto, tem]) => el('tr', {},
+      el('th', { scope: 'row' }, texto),
+      ...perfis.map((p) => el('td', { class: tem(p) ? 'sim' : 'nao' }, tem(p) ? 'Sim' : 'Não')))),
+    el('tr', { class: 'matriz-resumo' }, el('th', { scope: 'row' }, 'Resumo'), ...perfis.map((p) => el('td', {}, p.resumo))));
   }
 
   $('c-perfil').replaceChildren(...Object.entries(PERFIS).map(([valor, p]) => el('option', { value: valor }, p.rotulo)));
@@ -565,8 +807,11 @@
 
   $('lista-contas').addEventListener('change', (e) => {
     if (e.target.dataset.acao !== 'perfil') return;
-    const r = alterarConta(e.target.closest('.conta').dataset.codigo, { perfil: e.target.value });
+    const codigo = e.target.closest('.conta').dataset.codigo;
+    const r = alterarConta(codigo, { perfil: e.target.value });
     if (!r.ok) avisar(r.erro);
+    // Mudou o próprio perfil: recarrega para o menu e as páginas seguirem o perfil novo.
+    if (r.ok && codigo === conta.codigo) { location.reload(); return; }
     desenharContas();
   });
 
@@ -574,6 +819,8 @@
   document.documentElement.lang = 'pt-BR';
   $('versao').textContent = VERSAO;
   aplicarPerfil();
+  if (pode('administrar')) desenharMatriz();
+  mostrarPagina({ focar: false });
   atualizarData();
 
   // O navegador da Samsung gera o próprio pacote do app, e o Play Protect do Android bloqueia

@@ -3,9 +3,13 @@
 Projeto de extensão (ODS 10): sistema de controle de **estoque, doações e finanças**
 da Casa Via Matris. Funciona no navegador, instala no celular como um app e abre sem internet.
 
-## Versão 1.0
+## Versão 1.1
 
-Esta é a primeira versão que deixa de ser protótipo: tem tela de acesso e perfis. Os números 1.0.1 a 1.0.4
+Na 1.1.0 o painel deixou de ser uma página única e longa: cada assunto tem a própria página.
+Também entraram o gráfico de entradas e saídas, o filtro de mês no histórico, a tabela de acessos
+por perfil e o "Doador anônimo" automático.
+
+A 1.0 foi a primeira versão sem cara de protótipo, com tela de acesso e perfis. Os números 1.0.1 a 1.0.4
 usados antes eram do protótipo. A primeira versão com acesso é a 1.0.0, corrigida na 1.0.5.
 
 ## Versão no ar
@@ -43,17 +47,40 @@ mesmo se eles falharem: confira a aba depois de enviar.
 ## O que já funciona
 
 - **Acesso**: entrada com e-mail e senha. O primeiro acesso no aparelho cria o administrador, que cadastra as outras pessoas com senha provisória. Cinco erros bloqueiam a conta por 15 minutos.
-- **Perfis**: Administrador (tudo), Financeiro (dinheiro), Almoxarifado (estoque e doações) e Voluntário (consulta o estoque e registra doações e saídas).
-- **Resumo do dia**: saldo em caixa, itens abaixo do mínimo, itens que vencem em até 15 dias e doações do mês.
-- **Despensa**: cada item tem uma barra de quantidade com um tracinho no estoque mínimo.
+- **Perfis**:
+
+  | Página ou ação | Administrador | Financeiro | Almoxarifado | Voluntário |
+  | --- | :-: | :-: | :-: | :-: |
+  | Visão geral | ✓ | ✓ (só dinheiro) | ✓ (só estoque) | ✓ (só estoque) |
+  | Estoque | ✓ | | ✓ | ✓ |
+  | Registrar dinheiro | ✓ | ✓ | | |
+  | Registrar itens | ✓ | | ✓ | ✓ |
+  | Histórico | ✓ (tudo) | ✓ (só dinheiro) | ✓ (só estoque) | |
+  | Desfazer | ✓ | ✓ | ✓ | |
+  | Acessos e backup | ✓ | | | |
+
+  A lista de permissões fica em `js/acesso.js` (`PERFIS` e `PAGINAS`); os testes em `tests/acesso.test.js` conferem esta tabela.
+- **Páginas**: Visão geral, Estoque, Registrar, Histórico e Acessos, cada uma com endereço próprio
+  (`#/estoque`, `#/historico`...). O botão Voltar do celular funciona. Quem abre uma página fora do
+  próprio perfil vê "Sem permissão"; endereço que não existe mostra "Página não encontrada".
+- **Visão geral**: saldo em caixa, itens abaixo do mínimo, itens que vencem em até 15 dias e doações do mês.
+  Cada número leva à página do assunto. Cada perfil vê só os números da própria área.
+- **Gráfico de entradas e saídas**: barras por mês, nos últimos 6 meses, só para Financeiro e Administrador.
+  Mostra os valores ao passar o dedo, o mouse ou o Tab, e tem a mesma informação em tabela.
+  Azul = entrou, laranja = saiu: verde e vermelho se confundem para quem tem daltonismo.
+- **Estoque**: cada item tem uma barra de quantidade com um tracinho no estoque mínimo.
   Verde = suficiente, laranja = abaixo do mínimo, vermelho = acabou. Os itens mais
   "apertados" aparecem primeiro. Dá para buscar pelo nome e filtrar por categoria.
 - **Registrar movimentação**: 4 tipos (doação de itens, saída de itens, entrada de dinheiro,
   despesa). O formulário mostra só os campos daquele tipo. Doações podem cadastrar item novo.
+  Entrada de dinheiro sem nome fica registrada como **"Doador anônimo"** (regra no `store.js`).
 - **Desfazer**: cada linha do histórico tem um botão "Desfazer", com confirmação. Logo depois de registrar, o aviso também oferece o botão por 20 segundos.
   O tempo pausa enquanto o mouse ou o foco do teclado estão em cima do aviso.
-- **Histórico**: as 50 últimas movimentações, com filtro por estoque ou dinheiro. Quando
-  há mais de 50, a tela avisa quantas existem no total.
+- **Histórico**: filtro por **mês** e por estoque ou dinheiro. Com um mês escolhido, mostra o total
+  que entrou e saiu nele. Mostra até 50 linhas e avisa quando há mais. No celular, cada
+  movimentação vira um cartão, para o valor não ficar escondido à direita.
+- **Acessos** (só Administrador): tabela do que cada perfil vê, cadastro de pessoas, troca de perfil,
+  senha provisória e registro de atividades. A tabela é montada das mesmas listas que as regras usam.
 - **Backup**: baixa 3 planilhas (estoque, doações, dinheiro) e restaura delas, mesmo depois de editadas no Excel. Avisa quando o último backup tem mais de 7 dias.
 - **Dados de exemplo**: aparecem na primeira abertura. "Começar do zero" apaga tudo para o uso real.
 - **App no celular**: instala na tela inicial e abre sem internet.
@@ -70,7 +97,7 @@ js/store.js         as regras de negócio (o que pode ser gravado)
 js/backup.js        planilhas: baixar e restaurar
 js/acesso.js        contas, perfis, sessão e registro de atividades
 js/login.js         a tela de acesso
-js/app.js           a tela: desenha a página e responde aos cliques
+js/app.js           a tela: troca de página, desenha e responde aos cliques
 sw.js               guarda os arquivos para abrir sem internet
 manifest.json       nome e ícones do app instalado
 tests/              testes automáticos
@@ -109,7 +136,17 @@ Sugestão para o Anthony, alinhada ao que o grupo usa na faculdade:
 
 Encontrados na revisão do protótipo. Os marcados como corrigidos têm teste em `tests/`.
 
-### Corrigidos nesta versão
+### Corrigidos na 1.1.0
+
+- No celular, a tabela do histórico escondia a coluna do valor à direita. Agora cada linha vira um cartão.
+- "Doações neste mês" contava as doações em dinheiro para o Almoxarifado e as de itens para o Financeiro.
+- O administrador que mudava o próprio perfil continuava vendo as páginas do perfil antigo até recarregar.
+- Um endereço malformado (como `#/%E0`) deixava a tela quebrada.
+- Com a sessão vencida e a página aberta, registrar mostrava "Seu perfil não pode fazer isso". Agora volta para a entrada.
+- `Object.hasOwn` e `.at()` não existem em iPhones com iOS anterior ao 15.4 e travariam o app.
+- O repositório não tinha `.gitignore`. Agora banco, `.env` e planilhas de backup ficam fora do Git.
+
+### Corrigidos na 1.0
 
 - Desfazer uma movimentação apagava a validade do item (o alerta de vencimento sumia).
 - "1.000" na quantidade virava 1. Agora segue o formato brasileiro.
