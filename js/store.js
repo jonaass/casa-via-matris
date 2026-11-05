@@ -22,6 +22,8 @@
   };
   const CATEGORIAS = ['Alimentos', 'Higiene', 'Limpeza'];
   const PREFIXO_EXEMPLO = 'ex-'; // código dos lançamentos de exemplo, para reconhecê-los depois
+  // Entrada de dinheiro sem nome de quem doou: a casa precisa saber que foi de propósito, não esquecimento.
+  const DOADOR_ANONIMO = 'Doador anônimo';
 
   // ---------- utilitários ----------
 
@@ -246,6 +248,7 @@
       if (entrada.tipo === 'saida_dinheiro' && valor > saldoCentavos()) {
         return falha('Saldo insuficiente em caixa para essa despesa. Confira o valor ou registre antes a entrada.');
       }
+      if (entrada.tipo === 'entrada_dinheiro' && !mov.pessoa) mov.pessoa = DOADOR_ANONIMO;
       mov.valorCentavos = valor;
       const salvo = salvarRegistro('dinheiro', mov);
       return salvo.ok ? { ok: true, movimento: mov } : falha(salvo.erros[0]);
@@ -344,6 +347,27 @@
       };
     }
 
+    /*
+     * Entradas e saídas de dinheiro mês a mês, do mais antigo ao mês atual (para o gráfico).
+     * Mês sem movimento aparece com zero: um buraco no gráfico também é informação.
+     */
+    function fluxoMensal(quantosMeses = 6) {
+      let { ano, mes } = mesAtual();
+      const meses = [];
+      for (let i = 0; i < quantosMeses; i++) {
+        meses.unshift({ ano, mes, chave: `${ano}-${String(mes).padStart(2, '0')}`, entradas: 0, saidas: 0 });
+        ({ ano, mes } = mesAnterior(ano, mes));
+      }
+      const porChave = new Map(meses.map((m) => [m.chave, m]));
+      for (const m of movimentosDeDinheiro()) {
+        const alvo = porChave.get(m.data.slice(0, 7));
+        if (!alvo) continue;
+        if (m.tipo === 'entrada_dinheiro') alvo.entradas += m.valorCentavos;
+        else alvo.saidas += m.valorCentavos;
+      }
+      return meses;
+    }
+
     function movimentos() {
       return [...movimentosDeEstoque(), ...movimentosDeDinheiro()];
     }
@@ -357,6 +381,7 @@
       registrar,
       estornar,
       resumo,
+      fluxoMensal,
       restaurarExemplo: () => (permitir('administrar') ? gravarColecoes(dadosDeExemplo()) : NEGADO),
       apagarTudo: () => {
         if (!permitir('administrar')) return NEGADO;
@@ -374,7 +399,7 @@
   // Usados também pelo backup.js.
   Object.assign(raiz, { gerarCodigo, textoParaCentavos, centavosParaTexto, QUANTIDADE_MAXIMA });
 
-  const api = { criarStore, TIPOS, CATEGORIAS, DIAS_ALERTA_VALIDADE, quantidadeDeTexto };
+  const api = { criarStore, TIPOS, CATEGORIAS, DIAS_ALERTA_VALIDADE, DOADOR_ANONIMO, quantidadeDeTexto };
   raiz.ViaMatris = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -133,12 +133,12 @@
         </div>
       </div>
 
-      <nav aria-label="Seções do painel">
-        <a href="#resumo">Visão geral</a>
-        <a href="#despensa">Estoque</a>
-        <a href="#registrar">Registrar</a>
-        <a href="#historico">Histórico</a>
-        <a href="#usuarios" id="link-usuarios" hidden>Pessoas</a>
+      <nav aria-label="Páginas do painel">
+        <a href="#/inicio" data-pagina="inicio">Visão geral</a>
+        <a href="#/estoque" data-pagina="estoque">Estoque</a>
+        <a href="#/registrar" data-pagina="registrar">Registrar</a>
+        <a href="#/historico" data-pagina="historico">Histórico</a>
+        <a href="#/acessos" data-pagina="acessos">Acessos</a>
       </nav>
 
       <details class="lateral-rodape opcoes" id="opcoes">
@@ -170,11 +170,6 @@
     </aside>
 
     <main id="conteudo" tabindex="-1">
-      <header class="topo">
-        <p class="topo-data" id="data-hoje"></p>
-        <h1>Como está a casa hoje</h1>
-      </header>
-
       <div class="faixa" id="faixa-exemplo" hidden>
         <p>Estes são dados de exemplo. Para usar de verdade, apague-os e cadastre os itens da casa.</p>
         <button type="button" class="botao-fantasma" id="faixa-comecar-zero">Começar do zero</button>
@@ -190,37 +185,81 @@
         <button type="button" class="botao-fantasma" id="faixa-backup-baixar">Baixar planilhas</button>
       </div>
 
-      <section id="resumo" class="resumo" aria-label="Resumo do dia">
-        <div class="indicador" id="kpi-saldo-bloco">
-          <p class="indicador-titulo">Saldo em caixa</p>
-          <p class="indicador-valor" id="kpi-saldo"></p>
-          <p class="indicador-nota" id="kpi-saldo-nota"></p>
-        </div>
-        <div class="indicador" id="kpi-minimo-bloco">
-          <p class="indicador-titulo">Precisam de reposição</p>
-          <p class="indicador-valor" id="kpi-minimo"></p>
-          <p class="indicador-nota" id="kpi-minimo-nota"></p>
-        </div>
-        <div class="indicador" id="kpi-validade-bloco">
-          <p class="indicador-titulo">Vencem em até 15 dias</p>
-          <p class="indicador-valor" id="kpi-validade"></p>
-          <p class="indicador-nota" id="kpi-validade-nota"></p>
-        </div>
-        <div class="indicador">
-          <p class="indicador-titulo">Doações neste mês</p>
-          <p class="indicador-valor" id="kpi-doacoes"></p>
-          <p class="indicador-nota" id="kpi-doacoes-nota"></p>
-        </div>
+      <!-- Cada <section class="pagina"> é uma página: só uma aparece por vez, escolhida pelo endereço (#/estoque). -->
+      <section class="pagina" data-pagina="inicio" aria-labelledby="t-inicio" hidden>
+        <header class="topo">
+          <p class="topo-data" id="data-hoje"></p>
+          <h1 id="t-inicio" tabindex="-1">Como está a casa hoje</h1>
+        </header>
+
+        <section id="resumo" class="resumo" aria-label="Resumo do dia">
+          <a class="indicador" id="kpi-saldo-bloco" href="#/historico">
+            <span class="indicador-titulo">Saldo em caixa</span>
+            <span class="indicador-valor" id="kpi-saldo"></span>
+            <span class="indicador-nota" id="kpi-saldo-nota"></span>
+          </a>
+          <a class="indicador" id="kpi-minimo-bloco" href="#/estoque">
+            <span class="indicador-titulo">Precisam de reposição</span>
+            <span class="indicador-valor" id="kpi-minimo"></span>
+            <span class="indicador-nota" id="kpi-minimo-nota"></span>
+          </a>
+          <a class="indicador" id="kpi-validade-bloco" href="#/estoque">
+            <span class="indicador-titulo">Vencem em até 15 dias</span>
+            <span class="indicador-valor" id="kpi-validade"></span>
+            <span class="indicador-nota" id="kpi-validade-nota"></span>
+          </a>
+          <div class="indicador">
+            <span class="indicador-titulo">Doações neste mês</span>
+            <span class="indicador-valor" id="kpi-doacoes"></span>
+            <span class="indicador-nota" id="kpi-doacoes-nota"></span>
+          </div>
+        </section>
+
+        <a class="botao atalho-registrar" href="#/registrar">Registrar movimentação</a>
+
+        <section class="painel" id="grafico-bloco" aria-labelledby="titulo-grafico">
+          <div class="painel-cabeca painel-cabeca-linha">
+            <div>
+              <h2 id="titulo-grafico">Entradas e saídas de dinheiro</h2>
+              <p class="painel-ajuda">Últimos 6 meses. Passe o dedo, o mouse ou o Tab nos meses para ver os valores.</p>
+            </div>
+            <ul class="legenda" aria-label="Legenda">
+              <li><span class="amostra entrada" aria-hidden="true"></span>Entrou</li>
+              <li><span class="amostra saida" aria-hidden="true"></span>Saiu</li>
+            </ul>
+          </div>
+          <div class="grafico-area">
+            <div class="grafico" id="grafico"></div>
+            <div class="grafico-dica" id="grafico-dica" aria-hidden="true" hidden></div>
+          </div>
+          <p class="grafico-mes-atual" id="grafico-mes-atual"></p>
+          <p class="vazio" id="grafico-vazio" hidden>Ainda não há entradas nem despesas nos últimos 6 meses.</p>
+          <details class="grafico-tabela">
+            <summary>Ver os valores em tabela</summary>
+            <div class="tabela-rolagem">
+              <table class="tabela">
+                <thead>
+                  <tr>
+                    <th scope="col">Mês</th>
+                    <th scope="col" class="num">Entrou</th>
+                    <th scope="col" class="num">Saiu</th>
+                    <th scope="col" class="num">Resultado do mês</th>
+                  </tr>
+                </thead>
+                <tbody id="corpo-grafico"></tbody>
+              </table>
+            </div>
+          </details>
+        </section>
       </section>
 
-      <div class="grade">
-        <section id="despensa" class="painel" aria-labelledby="titulo-despensa">
-          <div class="painel-cabeca">
-            <h2 id="titulo-despensa">Despensa e almoxarifado</h2>
-            <p class="painel-ajuda">O tracinho em cada barra mostra o mínimo que a casa precisa ter. Barra antes do
-              tracinho: hora de pedir doação.</p>
-          </div>
-
+      <section class="pagina" data-pagina="estoque" aria-labelledby="t-estoque" hidden>
+        <header class="topo-pagina">
+          <h1 id="t-estoque" tabindex="-1">Estoque</h1>
+          <p class="painel-ajuda">O tracinho em cada barra mostra o mínimo que a casa precisa ter. Barra antes do
+            tracinho: hora de pedir doação.</p>
+        </header>
+        <section id="despensa" class="painel" aria-label="Itens da despensa e do almoxarifado">
           <div class="filtros">
             <label class="campo-busca">
               <span class="visualmente-oculto">Buscar item</span>
@@ -236,13 +275,17 @@
           </div>
 
           <ul class="prateleira" id="lista-itens"></ul>
-          <p class="vazio" id="lista-vazia" hidden>Nenhum item encontrado. Tente outro nome ou cadastre o item ao
-            registrar uma doação.</p>
+          <p class="vazio" id="lista-vazia" hidden>Nenhum item encontrado. Tente outro nome ou
+            <a href="#/registrar">cadastre o item ao registrar uma doação</a>.</p>
         </section>
+      </section>
 
-        <section id="registrar" class="painel painel-registro" aria-labelledby="titulo-registro">
-          <h2 id="titulo-registro">Registrar movimentação</h2>
-
+      <section class="pagina pagina-estreita" data-pagina="registrar" aria-labelledby="t-registrar" hidden>
+        <header class="topo-pagina">
+          <h1 id="t-registrar" tabindex="-1">Registrar movimentação</h1>
+          <p class="painel-ajuda">Doações, saídas de itens, entradas de dinheiro e despesas.</p>
+        </header>
+        <section id="registrar" class="painel painel-registro" aria-label="Formulário de movimentação">
           <form id="form-registro" novalidate>
             <fieldset class="tipos">
               <legend>O que aconteceu?</legend>
@@ -311,7 +354,8 @@
 
             <div class="campo">
               <label for="f-pessoa" id="r-pessoa">Quem doou?</label>
-              <input id="f-pessoa" name="pessoa" maxlength="80" autocomplete="off">
+              <input id="f-pessoa" name="pessoa" maxlength="80" autocomplete="off" aria-describedby="f-pessoa-dica">
+              <p class="dica" id="f-pessoa-dica" hidden>Em branco, fica registrado como “Doador anônimo”.</p>
             </div>
 
             <div class="campo">
@@ -328,62 +372,109 @@
             <button type="submit" class="botao" id="f-enviar">Registrar doação</button>
           </form>
         </section>
-      </div>
-
-      <section id="historico" class="painel" aria-labelledby="titulo-historico">
-        <div class="painel-cabeca painel-cabeca-linha">
-          <h2 id="titulo-historico">Histórico de movimentações</h2>
-          <label class="filtro-historico">
-            <span>Mostrar</span>
-            <select id="filtro-historico">
-              <option value="">Tudo</option>
-              <option value="estoque">Só estoque</option>
-              <option value="financeiro">Só dinheiro</option>
-            </select>
-          </label>
-        </div>
-        <p class="painel-ajuda historico-limite" id="historico-limite" hidden></p>
-        <div class="tabela-rolagem" tabindex="0" role="region" aria-labelledby="titulo-historico">
-          <table class="tabela">
-            <thead>
-              <tr>
-                <th scope="col">Data</th>
-                <th scope="col">Movimento</th>
-                <th scope="col">Detalhe</th>
-                <th scope="col">Quem</th>
-                <th scope="col" class="num">Quantidade ou valor</th>
-                <th scope="col"><span class="visualmente-oculto">Desfazer</span></th>
-              </tr>
-            </thead>
-            <tbody id="corpo-historico"></tbody>
-          </table>
-        </div>
-        <p class="vazio" id="historico-vazio" hidden>Nada registrado ainda. Use o formulário acima para lançar a
-          primeira movimentação.</p>
       </section>
 
-      <section id="usuarios" class="painel" aria-labelledby="titulo-usuarios" hidden>
-        <div class="painel-cabeca">
-          <h2 id="titulo-usuarios">Pessoas com acesso</h2>
-          <p class="painel-ajuda">Cadastre quem usa o sistema neste aparelho. Cada perfil vê só o que precisa.</p>
-        </div>
-        <ul class="contas" id="lista-contas"></ul>
-        <div class="senha-gerada" id="senha-gerada" role="status" hidden>
-          <p id="senha-gerada-texto"></p>
-          <p class="acesso-codigo" id="senha-gerada-valor"></p>
-          <button type="button" class="botao-fantasma" id="senha-gerada-fechar">Já anotei</button>
-        </div>
-        <form id="form-conta" class="form-conta" novalidate>
-          <div class="campo"><label for="c-nome">Nome</label><input id="c-nome" name="nome" maxlength="80" autocomplete="off"></div>
-          <div class="campo"><label for="c-email">E-mail</label><input id="c-email" name="email" type="email" maxlength="120" autocomplete="off"></div>
-          <div class="campo"><label for="c-perfil">Perfil</label><select id="c-perfil" name="perfil"></select></div>
-          <button type="submit" class="botao">Cadastrar pessoa</button>
-          <p class="erro" id="erro-conta" role="alert"></p>
-        </form>
-        <details class="auditoria">
-          <summary>Registro de atividades</summary>
-          <ol id="lista-auditoria"></ol>
-        </details>
+      <section class="pagina" data-pagina="historico" aria-labelledby="t-historico" hidden>
+        <header class="topo-pagina">
+          <h1 id="t-historico" tabindex="-1">Histórico</h1>
+          <p class="painel-ajuda">Tudo o que foi registrado, do mais novo para o mais antigo.</p>
+        </header>
+        <section id="historico" class="painel" aria-label="Movimentações">
+          <div class="filtros filtros-historico">
+            <label class="filtro-historico" id="filtro-area-rotulo">
+              <span>Mostrar</span>
+              <select id="filtro-historico">
+                <option value="">Tudo</option>
+                <option value="estoque">Só estoque</option>
+                <option value="financeiro">Só dinheiro</option>
+              </select>
+            </label>
+            <label class="filtro-historico">
+              <span>Mês</span>
+              <select id="filtro-mes">
+                <option value="">Todos os meses</option>
+              </select>
+            </label>
+          </div>
+          <p class="historico-total" id="historico-total" aria-live="polite"></p>
+          <p class="painel-ajuda historico-limite" id="historico-limite" hidden></p>
+          <div class="tabela-rolagem" tabindex="0" role="region" aria-label="Tabela de movimentações">
+            <table class="tabela tabela-historico">
+              <thead>
+                <tr>
+                  <th scope="col">Data</th>
+                  <th scope="col">Movimento</th>
+                  <th scope="col">Detalhe</th>
+                  <th scope="col">Quem</th>
+                  <th scope="col" class="num">Quantidade ou valor</th>
+                  <th scope="col"><span class="visualmente-oculto">Desfazer</span></th>
+                </tr>
+              </thead>
+              <tbody id="corpo-historico"></tbody>
+            </table>
+          </div>
+          <p class="vazio" id="historico-vazio" hidden></p>
+        </section>
+      </section>
+
+      <section class="pagina" data-pagina="acessos" aria-labelledby="t-acessos" hidden>
+        <header class="topo-pagina">
+          <h1 id="t-acessos" tabindex="-1">Acessos</h1>
+          <p class="painel-ajuda">Quem usa o sistema neste aparelho e o que cada perfil pode ver e fazer.</p>
+        </header>
+
+        <section class="painel" aria-labelledby="titulo-perfis">
+          <h2 id="titulo-perfis">O que cada perfil vê</h2>
+          <div class="tabela-rolagem" tabindex="0" role="region" aria-labelledby="titulo-perfis">
+            <table class="tabela matriz">
+              <thead id="matriz-cabeca"></thead>
+              <tbody id="matriz-corpo"></tbody>
+            </table>
+          </div>
+          <p class="painel-ajuda matriz-nota">Os perfis ainda são proposta e precisam ser validados com a equipe da casa.</p>
+        </section>
+
+        <section id="usuarios" class="painel" aria-labelledby="titulo-usuarios">
+          <div class="painel-cabeca">
+            <h2 id="titulo-usuarios">Pessoas com acesso</h2>
+            <p class="painel-ajuda">Cadastre quem usa o sistema neste aparelho. A pessoa recebe uma senha provisória e
+              cria a própria senha no primeiro acesso.</p>
+          </div>
+          <ul class="contas" id="lista-contas"></ul>
+          <div class="senha-gerada" id="senha-gerada" role="status" hidden>
+            <p id="senha-gerada-texto"></p>
+            <p class="acesso-codigo" id="senha-gerada-valor"></p>
+            <button type="button" class="botao-fantasma" id="senha-gerada-fechar">Já anotei</button>
+          </div>
+          <h3 class="subtitulo">Liberar acesso para uma pessoa</h3>
+          <form id="form-conta" class="form-conta" novalidate>
+            <div class="campo"><label for="c-nome">Nome</label><input id="c-nome" name="nome" maxlength="80" autocomplete="off"></div>
+            <div class="campo"><label for="c-email">E-mail</label><input id="c-email" name="email" type="email" maxlength="120" autocomplete="off"></div>
+            <div class="campo"><label for="c-perfil">Perfil</label><select id="c-perfil" name="perfil"></select></div>
+            <button type="submit" class="botao">Liberar acesso</button>
+            <p class="erro" id="erro-conta" role="alert"></p>
+          </form>
+          <details class="auditoria">
+            <summary>Registro de atividades</summary>
+            <ol id="lista-auditoria"></ol>
+          </details>
+        </section>
+      </section>
+
+      <section class="pagina pagina-estreita" data-pagina="sem-permissao" aria-labelledby="t-sem-permissao" hidden>
+        <header class="topo-pagina">
+          <h1 id="t-sem-permissao" tabindex="-1">Sem permissão</h1>
+          <p class="painel-ajuda" id="sem-permissao-texto"></p>
+        </header>
+        <a class="botao" href="#/inicio">Ir para a Visão geral</a>
+      </section>
+
+      <section class="pagina pagina-estreita" data-pagina="nao-encontrada" aria-labelledby="t-nao-encontrada" hidden>
+        <header class="topo-pagina">
+          <h1 id="t-nao-encontrada" tabindex="-1">Página não encontrada</h1>
+          <p class="painel-ajuda">Esse endereço não existe no painel. Use o menu do topo.</p>
+        </header>
+        <a class="botao" href="#/inicio">Ir para a Visão geral</a>
       </section>
     </main>
   </div>

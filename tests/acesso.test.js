@@ -297,3 +297,29 @@ test('o modo offline é registrado antes do login', () => {
   assert.ok(ler('login.js').includes('serviceWorker.register'));
   assert.ok(!ler('app.js').includes('serviceWorker.register'));
 });
+
+// A tabela de acessos combinada: o administrador vê tudo; cada um dos outros vê só a própria área.
+const MATRIZ = {
+  administrador: { inicio: true, estoque: true, registrar: true, historico: true, acessos: true, ver_estoque: true, ver_financeiro: true, desfazer: true },
+  financeiro: { inicio: true, estoque: false, registrar: true, historico: true, acessos: false, ver_estoque: false, ver_financeiro: true, desfazer: true },
+  almoxarifado: { inicio: true, estoque: true, registrar: true, historico: true, acessos: false, ver_estoque: true, ver_financeiro: false, desfazer: true },
+  voluntario: { inicio: true, estoque: true, registrar: true, historico: false, acessos: false, ver_estoque: true, ver_financeiro: false, desfazer: false },
+};
+
+for (const [perfil, esperado] of Object.entries(MATRIZ)) {
+  test(`matriz de acessos: ${perfil}`, async () => {
+    if (perfil === 'administrador') await criarAdministrador(ADMIN);
+    else await entrarComo(perfil);
+    for (const [chave, valor] of Object.entries(esperado)) {
+      const obtido = chave in PAGINAS ? podeVerPagina(chave) : pode(chave);
+      assert.equal(obtido, valor, `${perfil} → ${chave}`);
+    }
+  });
+}
+
+test('página que não existe ou sem sessão não abre', async () => {
+  assert.equal(podeVerPagina('inicio'), false); // ninguém entrou ainda
+  await criarAdministrador(ADMIN);
+  assert.equal(podeVerPagina('nao-existe'), false);
+  assert.equal(podeVerPagina('constructor'), false); // nome que existe em todo objeto do JavaScript
+});

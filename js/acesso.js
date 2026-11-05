@@ -18,12 +18,40 @@
   const ESTOQUE = ['ver_estoque', 'doacao_item', 'saida_item'];
   const DINHEIRO = ['ver_financeiro', 'entrada_dinheiro', 'saida_dinheiro'];
 
-  /** Os 4 perfis do FigJam. Ainda são proposta: falta validar com a equipe da casa. */
+  /**
+   * Os 4 perfis do FigJam. Ainda são proposta: falta validar com a equipe da casa.
+   * "resumo" é o que a pessoa vê na Visão geral; os textos aparecem na página Acessos.
+   */
   const PERFIS = {
-    administrador: { rotulo: 'Administrador', pode: [...ESTOQUE, ...DINHEIRO, 'historico', 'desfazer', 'administrar'] },
-    financeiro: { rotulo: 'Financeiro', pode: [...DINHEIRO, 'historico', 'desfazer'] },
-    almoxarifado: { rotulo: 'Almoxarifado', pode: [...ESTOQUE, 'historico', 'desfazer'] },
-    voluntario: { rotulo: 'Voluntário', pode: ESTOQUE },
+    administrador: {
+      rotulo: 'Administrador', resumo: 'Vê e faz tudo, inclusive cadastrar pessoas e fazer backup.',
+      pode: [...ESTOQUE, ...DINHEIRO, 'historico', 'desfazer', 'administrar'],
+    },
+    financeiro: {
+      rotulo: 'Financeiro', resumo: 'Cuida do dinheiro: saldo, gráfico, entradas, despesas e o histórico do caixa. Não vê o estoque.',
+      pode: [...DINHEIRO, 'historico', 'desfazer'],
+    },
+    almoxarifado: {
+      rotulo: 'Almoxarifado', resumo: 'Cuida do estoque: itens, doações, saídas e o histórico do estoque. Não vê o dinheiro.',
+      pode: [...ESTOQUE, 'historico', 'desfazer'],
+    },
+    voluntario: {
+      rotulo: 'Voluntário', resumo: 'Consulta o estoque e registra doações e saídas de itens. Não vê dinheiro nem histórico, e não desfaz.',
+      pode: ESTOQUE,
+    },
+  };
+
+  /*
+   * Cada página do painel e o que é preciso para abri-la (basta uma das permissões).
+   * Esconder o link no menu é só conforto: quem digita o endereço cai em "Sem permissão".
+   * No back-end, cada rota da API repete esta conferência e responde 403.
+   */
+  const PAGINAS = {
+    inicio: { rotulo: 'Visão geral', precisa: [] },
+    estoque: { rotulo: 'Estoque', precisa: ['ver_estoque'] },
+    registrar: { rotulo: 'Registrar', precisa: ['doacao_item', 'saida_item', 'entrada_dinheiro', 'saida_dinheiro'] },
+    historico: { rotulo: 'Histórico', precisa: ['historico'] },
+    acessos: { rotulo: 'Acessos', precisa: ['administrar'] },
   };
 
   const ITERACOES = 600000; // PBKDF2-SHA256, número recomendado pela OWASP
@@ -119,6 +147,13 @@
   function pode(acao) {
     const conta = contaAtual();
     return Boolean(conta && PERFIS[conta.perfil]?.pode.includes(acao));
+  }
+
+  /** A pessoa da sessão pode abrir esta página? Página que não existe: não. */
+  function podeVerPagina(pagina) {
+    const p = Object.prototype.hasOwnProperty.call(PAGINAS, pagina) ? PAGINAS[pagina] : null;
+    if (!p || !contaAtual()) return false;
+    return !p.precisa.length || p.precisa.some(pode);
   }
 
   function sair(registrar = true) {
@@ -315,7 +350,7 @@
   }
 
   Object.assign(globalThis, {
-    recadosDaCasa, PERFIS, SENHA_MINIMA, temContas: () => contas().length > 0, contaAtual, pode, entrar, sair, trocarSenha, recuperarSenha,
+    recadosDaCasa, PERFIS, PAGINAS, podeVerPagina, SENHA_MINIMA, temContas: () => contas().length > 0, contaAtual, pode, entrar, sair, trocarSenha, recuperarSenha,
     criarAdministrador, listarContas, criarConta, redefinirSenhaDe, alterarConta, lerAuditoria, registrarAuditoria,
   });
 })();

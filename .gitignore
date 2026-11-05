@@ -1,0 +1,45 @@
+# O repositório é público: nada com dado da casa ou senha pode entrar aqui.
+
+# Banco de dados (Fase 2: SQLite)
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Configuração com segredos. O modelo sem segredos vai como .env.example.
+.env
+.env.*
+!.env.example
+
+# Planilhas de backup baixadas do app (têm doadores e valores reais).
+# As planilhas fictícias de teste ficam em tests/planilhas/ e continuam no repositório.
+backups/
+via-matris-*.csv
+!tests/planilhas/*.csv
+
+# Python (back-end)
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+instance/
+
+# Node (se o grupo instalar ferramentas)
+node_modules/
+npm-debug.log*
+
+# Editores e sistema
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Notas pessoais do Obsidian (a pasta de configuração muda em cada computador)
+.obsidian/workspace*.json

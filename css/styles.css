@@ -32,6 +32,10 @@
   --pinho-texto: #a5e4cd;
   --rubi-texto: #ffb8b2;
   --erro-fundo: #2c1b1c;
+  /* Gráfico: azul = entrou, laranja = saiu. Par validado para daltonismo sobre a superfície escura
+     (verde e vermelho se confundem). Só para o gráfico: no resto do app, verde e vermelho seguem como estão. */
+  --serie-entrada: #3a8fcf;
+  --serie-saida: #c97538;
   --aviso-fundo: #27333f;
 
   --fonte-titulo: 'Hanken Grotesk', 'Segoe UI', system-ui, sans-serif;
@@ -73,8 +77,12 @@ h2 {
 }
 
 h1 {
-  font-size: clamp(2.75rem, 1.5rem + 5.5vw, 5.75rem);
-  max-width: 14ch;
+  font-size: clamp(2.25rem, 1.6rem + 2.6vw, 3.75rem);
+  max-width: 18ch;
+}
+
+h1:focus {
+  outline: none;
 }
 
 h2 {
@@ -184,6 +192,14 @@ p {
   color: var(--tinta);
 }
 
+/* Página aberta: fundo, texto claro e negrito. Não depende só da cor. */
+.lateral nav a[aria-current='page'] {
+  background: var(--elevado);
+  color: var(--tinta);
+  font-weight: 700;
+  box-shadow: inset 0 -2px 0 var(--calendula);
+}
+
 .lateral-rodape {
   position: relative;
   font-size: 0.875rem;
@@ -252,7 +268,7 @@ main {
   width: 100%;
   max-width: 1320px;
   margin-inline: auto;
-  padding: clamp(40px, 7vw, 88px) clamp(16px, 4vw, 48px) 96px;
+  padding: clamp(24px, 4vw, 48px) clamp(16px, 4vw, 48px) 96px;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 32px;
@@ -301,9 +317,27 @@ main:focus {
 }
 
 .indicador {
+  display: block;
   padding: 22px 24px;
   border-left: 1px solid var(--linha);
   min-width: 0;
+  color: inherit;
+  text-decoration: none;
+}
+
+.indicador > span {
+  display: block;
+}
+
+/* Os indicadores levam à página do assunto. */
+a.indicador[href]:hover {
+  background: var(--superficie);
+}
+
+a.indicador[href]:hover .indicador-titulo {
+  color: var(--tinta);
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 .indicador:first-child {
@@ -344,13 +378,6 @@ main:focus {
 }
 
 /* ---------- painéis ---------- */
-
-.grade {
-  display: grid;
-  grid-template-columns: minmax(0, 1.5fr) minmax(320px, 1fr);
-  gap: 24px;
-  align-items: start;
-}
 
 .painel {
   background: var(--superficie);
@@ -559,13 +586,6 @@ main:focus {
   gap: 16px;
 }
 
-/* Fixo ao rolar só em telas altas; em telas baixas o botão "Registrar" ficaria escondido. */
-@media (min-width: 961px) and (min-height: 1000px) {
-  .painel-registro {
-    position: sticky;
-    top: 96px;
-  }
-}
 
 form {
   display: grid;
@@ -1197,10 +1217,6 @@ select[aria-invalid='true'] {
   border-top: 1px solid var(--linha);
 }
 
-.grade.so-registro {
-  grid-template-columns: minmax(0, 640px);
-}
-
 .resumo[data-blocos='1'],
 .resumo[data-blocos='2'] {
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -1338,13 +1354,21 @@ select[aria-invalid='true'] {
     justify-content: space-between;
   }
 
-  .lateral nav a {
-    padding: 0 6px;
-    font-size: 0.9375rem;
+  /* Menu numa linha só; se não couber, rola para o lado em vez de quebrar. */
+  .lateral nav {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    /* Borda direita esmaecida: sinal de que há mais páginas para o lado. */
+    mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+    padding-right: 24px;
   }
 
-  .grade {
-    grid-template-columns: minmax(0, 1fr);
+  .lateral nav a {
+    padding: 0 10px;
+    font-size: 0.9375rem;
+    white-space: nowrap;
+    flex: none;
   }
 
   .acesso {
@@ -1366,11 +1390,6 @@ select[aria-invalid='true'] {
 
   .vidros {
     display: none;
-  }
-
-  /* No celular, registrar vem antes da lista: é a ação mais usada. */
-  #registrar {
-    order: -1;
   }
 
   html {
@@ -1408,5 +1427,300 @@ select[aria-invalid='true'] {
 
   .barra-cheia {
     transition: none;
+  }
+}
+
+/* ---------- páginas ---------- */
+
+.pagina {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 24px;
+  align-content: start;
+}
+
+.pagina-estreita {
+  max-width: 680px;
+}
+
+.topo-pagina {
+  display: grid;
+  gap: 8px;
+}
+
+.topo-pagina h1 {
+  font-size: clamp(2rem, 1.6rem + 1.6vw, 3rem);
+}
+
+.atalho-registrar {
+  justify-self: start;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+}
+
+.subtitulo {
+  font-size: 1.0625rem;
+  margin: 8px 0 12px;
+}
+
+.dica {
+  font-size: 0.875rem;
+  color: var(--suave);
+}
+
+/* ---------- gráfico ---------- */
+
+.legenda {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  gap: 16px;
+  font-size: 0.9375rem;
+}
+
+.legenda li,
+.grafico-dica > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.amostra {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  flex: none;
+}
+
+.amostra.entrada { background: var(--serie-entrada); }
+.amostra.saida { background: var(--serie-saida); }
+
+.grafico {
+  position: relative;
+  min-height: 240px;
+}
+
+.grafico svg {
+  display: block;
+  overflow: visible;
+}
+
+.grafico text {
+  fill: var(--suave);
+  font-family: var(--fonte-texto);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.grafico .mes-nome.atual {
+  fill: var(--tinta);
+  font-weight: 700;
+}
+
+.eixo-grade line {
+  stroke: var(--linha);
+  stroke-width: 1;
+  stroke-dasharray: 2 4;
+}
+
+.eixo-base line {
+  stroke: var(--borda-campo);
+  stroke-width: 1;
+}
+
+.barra-entrada { fill: var(--serie-entrada); }
+.barra-saida { fill: var(--serie-saida); }
+
+.mes {
+  cursor: default;
+  outline: none;
+}
+
+.mes-fundo {
+  fill: transparent;
+  rx: 8px;
+}
+
+.mes.ativo .mes-fundo,
+.mes:focus-visible .mes-fundo {
+  fill: rgba(255, 255, 255, 0.05);
+}
+
+.mes:focus-visible .mes-fundo {
+  stroke: var(--foco);
+  stroke-width: 2px;
+}
+
+.grafico-area {
+  position: relative;
+}
+
+.grafico-mes-atual {
+  margin-top: 8px;
+  color: var(--suave);
+}
+
+/* Flutua sobre o topo do gráfico: aparecer e sumir não empurra o resto da página. */
+.grafico-dica {
+  position: absolute;
+  top: 0;
+  z-index: 1;
+  pointer-events: none;
+  display: grid;
+  gap: 2px;
+  width: max-content;
+  max-width: 100%;
+  padding: 10px 14px;
+  border: 1px solid var(--linha);
+  border-radius: var(--raio-pequeno);
+  background: var(--elevado);
+  font-size: 0.9375rem;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4);
+}
+
+.dica-resultado {
+  color: var(--suave);
+}
+
+.grafico-tabela {
+  margin-top: 16px;
+}
+
+.grafico-tabela summary,
+.auditoria summary {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  color: var(--suave);
+}
+
+.grafico-tabela th[scope='row'] {
+  font-weight: 400;
+  color: var(--tinta);
+  text-align: left;
+  padding: 12px 12px 12px 0;
+  border-bottom: 1px solid var(--linha);
+}
+
+/* ---------- histórico ---------- */
+
+.filtros-historico {
+  margin-bottom: 8px;
+}
+
+.historico-total {
+  color: var(--suave);
+  margin-bottom: 12px;
+}
+
+/* ---------- acessos ---------- */
+
+.matriz th[scope='row'] {
+  font-weight: 400;
+  text-align: left;
+  padding: 12px 12px 12px 0;
+  border-bottom: 1px solid var(--linha);
+  color: var(--tinta);
+  min-width: 14ch;
+}
+
+.matriz td {
+  text-align: center;
+  white-space: nowrap;
+}
+
+.matriz th[scope='col']:not(:first-child) {
+  text-align: center;
+}
+
+.matriz td.sim {
+  color: var(--pinho-texto);
+  font-weight: 700;
+}
+
+.matriz td.sim::before {
+  content: '✓ ';
+}
+
+.matriz td.nao {
+  color: var(--suave);
+}
+
+.matriz .matriz-resumo td {
+  white-space: normal;
+  text-align: left;
+  font-size: 0.875rem;
+  color: var(--suave);
+  min-width: 18ch;
+}
+
+.matriz-nota {
+  margin-top: 12px;
+}
+
+#titulo-perfis {
+  margin-bottom: 18px;
+}
+
+.matriz .matriz-resumo th,
+.matriz .matriz-resumo td {
+  border-bottom: 0;
+}
+
+/* No celular, cada movimentação vira um cartão: a coluna do valor não fica escondida à direita. */
+@media (max-width: 640px) {
+  .tabela-historico thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+
+  .tabela-historico,
+  .tabela-historico tbody,
+  .tabela-historico tr,
+  .tabela-historico td {
+    display: block;
+    width: 100%;
+  }
+
+  .tabela-historico tr {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 4px 12px;
+    padding: 14px 0;
+    border-bottom: 1px solid var(--linha);
+  }
+
+  .tabela-historico tr:last-child {
+    border-bottom: 0;
+  }
+
+  .tabela-historico td,
+  .tabela-historico td.num,
+  .tabela-historico .acao {
+    padding: 0;
+    border: 0;
+    text-align: left;
+  }
+
+  .tabela-historico td[data-rotulo='Data'] { color: var(--suave); }
+  .tabela-historico td[data-rotulo='Quantidade ou valor'] { grid-column: 2; grid-row: 1 / span 2; text-align: right; font-size: 1.0625rem; }
+  .tabela-historico td[data-rotulo='Movimento'] { grid-column: 1; }
+  .tabela-historico td[data-rotulo='Detalhe'],
+  .tabela-historico td[data-rotulo='Quem'] { grid-column: 1 / -1; }
+  .tabela-historico td[data-rotulo='Quem']::before { content: 'Quem: '; color: var(--suave); }
+  /* Desfazer pequeno e à direita: é uma ação rara, não pode pesar mais que o lançamento. */
+  .tabela-historico .acao { grid-column: 1 / -1; text-align: right; }
+  .tabela-historico .acao .botao-fantasma { min-height: 40px; padding: 6px 14px; font-size: 0.875rem; color: var(--suave); }
+}
+
+@media (max-width: 560px) {
+  .legenda {
+    width: 100%;
   }
 }

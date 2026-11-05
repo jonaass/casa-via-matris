@@ -299,3 +299,39 @@ test('lançar algo por cima dos exemplos protege esses dados de serem apagados n
   assert.equal(s.soExemplos(), false);
   assert.equal(s.temExemplos(), true);
 });
+
+test('entrada de dinheiro sem nome vira "Doador anônimo"; com nome, fica o nome', () => {
+  const s = criarStore();
+  for (const pessoa of [undefined, '', '   ']) {
+    const r = s.registrar({ tipo: 'entrada_dinheiro', valor: '10', descricao: 'Pix', pessoa });
+    assert.equal(r.movimento.pessoa, 'Doador anônimo');
+  }
+  assert.equal(s.registrar({ tipo: 'entrada_dinheiro', valor: '10', descricao: 'Pix', pessoa: ' Maria ' }).movimento.pessoa, 'Maria');
+  // Despesa e doação de itens sem nome continuam sem nome: lá a pessoa não é doador de dinheiro.
+  assert.equal(s.registrar({ tipo: 'saida_dinheiro', valor: '1', descricao: 'Pão' }).movimento.pessoa, '');
+  assert.equal(s.registrar({ tipo: 'doacao_item', itemId: 'arroz', quantidade: 1 }).movimento.pessoa, '');
+});
+
+test('fluxo mensal soma entradas e saídas por mês, com mês vazio em zero', () => {
+  const s = criarStore();
+  s.apagarTudo();
+  const hoje = dataDeHoje();
+  const { ano, mes } = mesAtual();
+  const anterior = mesAnterior(ano, mes);
+  const diaDoMesPassado = `${anterior.ano}-${String(anterior.mes).padStart(2, '0')}-10`;
+  s.registrar({ tipo: 'entrada_dinheiro', valor: '100', descricao: 'a', data: diaDoMesPassado });
+  s.registrar({ tipo: 'entrada_dinheiro', valor: '50,50', descricao: 'b', data: hoje });
+  s.registrar({ tipo: 'saida_dinheiro', valor: '20', descricao: 'c', data: hoje });
+
+  const meses = s.fluxoMensal(6);
+  assert.equal(meses.length, 6);
+  const atual = meses.at(-1);
+  assert.equal(atual.chave, hoje.slice(0, 7));
+  assert.equal(atual.entradas, 5050);
+  assert.equal(atual.saidas, 2000);
+  assert.equal(meses.at(-2).entradas, 10000);
+  assert.equal(meses.at(-2).saidas, 0);
+  assert.deepEqual(meses.slice(0, 4).map((m) => m.entradas + m.saidas), [0, 0, 0, 0]);
+  // A virada de ano não pode quebrar a sequência de meses.
+  assert.equal(new Set(meses.map((m) => m.chave)).size, 6);
+});
