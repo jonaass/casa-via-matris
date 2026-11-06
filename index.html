@@ -170,6 +170,9 @@
     </aside>
 
     <main id="conteudo" tabindex="-1">
+      <div class="faixa faixa-erro" id="faixa-armazenamento" role="alert" hidden>
+        <p id="faixa-armazenamento-texto"></p>
+      </div>
       <div class="faixa" id="faixa-exemplo" hidden>
         <p>Estes são dados de exemplo. Para usar de verdade, apague-os e cadastre os itens da casa.</p>
         <button type="button" class="botao-fantasma" id="faixa-comecar-zero">Começar do zero</button>
@@ -191,6 +194,9 @@
           <p class="topo-data" id="data-hoje"></p>
           <h1 id="t-inicio" tabindex="-1">Como está a casa hoje</h1>
         </header>
+
+        <!-- Antes dos indicadores: é a ação principal, e no celular fica à vista sem rolar. -->
+        <a class="botao atalho-registrar" href="#/registrar">Registrar movimentação</a>
 
         <section id="resumo" class="resumo" aria-label="Resumo do dia">
           <a class="indicador" id="kpi-saldo-bloco" href="#/historico">
@@ -215,7 +221,6 @@
           </div>
         </section>
 
-        <a class="botao atalho-registrar" href="#/registrar">Registrar movimentação</a>
 
         <section class="painel" id="grafico-bloco" aria-labelledby="titulo-grafico">
           <div class="painel-cabeca painel-cabeca-linha">

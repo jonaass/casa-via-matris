@@ -95,7 +95,7 @@
   // Um teto "redondo" para o eixo: 1.000, 2.000, 2.500, 5.000...
   function tetoDoEixo(maior) {
     if (maior <= 0) return 100000;
-    const potencia = 10 ** Math.floor(Math.log10(maior));
+    const potencia = 10 ** Math.floor(Math.log10(maior / 4));
     const passo = [1, 2, 2.5, 5, 10].map((f) => f * potencia).find((v) => v >= maior / 4);
     return passo * 4;
   }
@@ -190,7 +190,10 @@
   }
 
   $('grafico').addEventListener('pointerover', (e) => { const g = e.target.closest('.mes'); if (g) mostrarDica(g); });
-  $('grafico').addEventListener('pointerleave', esconderDica);
+  // No toque, o dedo sai da tela logo depois: a dica fica até tocar fora do gráfico.
+  $('grafico').addEventListener('pointerleave', (e) => { if (e.pointerType === 'mouse') esconderDica(); });
+  document.addEventListener('pointerdown', (e) => { if (!$('grafico').contains(e.target)) esconderDica(); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') esconderDica(); });
   $('grafico').addEventListener('focusin', (e) => { const g = e.target.closest('.mes'); if (g) mostrarDica(g); });
   $('grafico').addEventListener('focusout', esconderDica);
   // Redesenha quando a largura muda (girar o celular, abrir o painel).
@@ -565,6 +568,7 @@
   $('restaurar').addEventListener('click', () => mostrarConfirmacao('exemplo'));
   $('restaurar-nao').addEventListener('click', () => mostrarConfirmacao(null));
   $('restaurar-sim').addEventListener('click', () => {
+    if (conferirSessao()) return;
     const { fazer, feito } = CONFIRMACOES[confirmacao];
     const erro = fazer();
     if (!erro) registrarAuditoria(feito);
@@ -591,7 +595,7 @@
   }
 
   async function fazerBackup() {
-    if (!pode('administrar')) return;
+    if (conferirSessao() || !pode('administrar')) return;
     const r = await baixarTodasAsPlanilhas();
     if (r.ok) registrarAuditoria('Baixou as planilhas');
     desenharBackup();
@@ -602,7 +606,7 @@
   $('faixa-backup-baixar').addEventListener('click', fazerBackup);
   $('backup-restaurar').addEventListener('click', () => $('backup-arquivo').click());
   $('backup-arquivo').addEventListener('change', async (e) => {
-    if (!pode('administrar')) return;
+    if (conferirSessao() || !pode('administrar')) return;
     const arquivos = [...e.target.files];
     e.target.value = ''; // permite escolher o mesmo arquivo de novo
     if (!arquivos.length) return;
@@ -642,13 +646,18 @@
     desenharHistorico();
     desenharBackup();
     desenharContas();
+    const problemas = problemasDoArmazenamento();
+    $('faixa-armazenamento').hidden = !problemas.length;
+    $('faixa-armazenamento-texto').textContent = problemas.join(' ');
   }
 
   // ---------- perfil e conta ----------
 
   // Sessão vencida ou conta desativada: volta para o login, limpando a tela.
   function conferirSessao() {
-    if (contaAtual()?.codigo === conta?.codigo) return false;
+    const atual = contaAtual();
+    // Outra aba pode ter trocado o perfil: recarrega para o menu e as páginas seguirem o perfil novo.
+    if (atual?.codigo === conta?.codigo && atual?.perfil === conta?.perfil) return false;
     location.reload();
     return true;
   }
@@ -684,23 +693,12 @@
    * Cada página tem o próprio endereço (#/estoque, #/historico...). Assim o botão Voltar do
    * celular funciona, e dá para salvar o atalho de uma página. As permissões ficam no acesso.js.
    */
-  const ENDERECOS_ANTIGOS = { resumo: 'inicio', despensa: 'estoque', usuarios: 'acessos', conteudo: 'inicio' };
-
-  function paginaDoEndereco() {
-    let nome = location.hash.replace(/^#\/?/, '');
-    try { nome = decodeURIComponent(nome); } catch (e) { return 'nao-encontrada'; } // endereço malformado, como #/%E0
-    nome = nome || 'inicio';
-    return ENDERECOS_ANTIGOS[nome] ?? nome;
-  }
-
   function mostrarPagina({ focar = true } = {}) {
     if (conferirSessao()) return;
-    let pagina = paginaDoEndereco();
-    if (!Object.prototype.hasOwnProperty.call(PAGINAS, pagina)) pagina = 'nao-encontrada';
-    else if (!podeVerPagina(pagina)) {
-      $('sem-permissao-texto').textContent = `A página ${PAGINAS[pagina].rotulo} não faz parte do perfil ${PERFIS[conta.perfil].rotulo}. ` +
+    const { pagina, pedida } = paginaDoEndereco(location.hash);
+    if (pedida) {
+      $('sem-permissao-texto').textContent = `A página ${PAGINAS[pedida].rotulo} não faz parte do perfil ${PERFIS[conta.perfil].rotulo}. ` +
         'Se você precisa dela, peça ao administrador.';
-      pagina = 'sem-permissao';
     }
     document.querySelectorAll('.pagina').forEach((secao) => { secao.hidden = secao.dataset.pagina !== pagina; });
     document.querySelectorAll('.lateral nav a[data-pagina]').forEach((a) => {
@@ -778,10 +776,17 @@
   $('c-perfil').replaceChildren(...Object.entries(PERFIS).map(([valor, p]) => el('option', { value: valor }, p.rotulo)));
   $('senha-gerada-fechar').addEventListener('click', () => { $('senha-gerada').hidden = true; });
 
+  // Desliga o botão enquanto a senha é calculada (leva segundos em celular antigo): evita o toque duplo.
+  async function comBotaoTravado(botao, tarefa) {
+    if (botao) botao.disabled = true;
+    try { return await tarefa(); } finally { if (botao) botao.disabled = false; }
+  }
+
   $('form-conta').addEventListener('submit', async (e) => {
     e.preventDefault();
+    if (conferirSessao()) return;
     const dados = Object.fromEntries(new FormData(e.target));
-    const r = await criarConta(dados);
+    const r = await comBotaoTravado(e.target.querySelector('button[type=submit]'), () => criarConta(dados));
     $('erro-conta').textContent = r.ok ? '' : r.erro;
     if (!r.ok) return;
     e.target.reset();
@@ -791,11 +796,11 @@
 
   $('lista-contas').addEventListener('click', async (e) => {
     const acao = e.target.closest('button[data-acao]')?.dataset.acao;
-    if (!acao) return;
+    if (!acao || conferirSessao()) return;
     const codigo = e.target.closest('.conta').dataset.codigo;
     const pessoa = listarContas().find((c) => c.codigo === codigo);
     if (acao === 'senha') {
-      const r = await redefinirSenhaDe(codigo);
+      const r = await comBotaoTravado(e.target.closest('button'), () => redefinirSenhaDe(codigo));
       desenharContas();
       if (r.ok) mostrarSenhaGerada(pessoa.nome, r.senhaProvisoria); else avisar(r.erro);
       return;
@@ -806,7 +811,7 @@
   });
 
   $('lista-contas').addEventListener('change', (e) => {
-    if (e.target.dataset.acao !== 'perfil') return;
+    if (e.target.dataset.acao !== 'perfil' || conferirSessao()) return;
     const codigo = e.target.closest('.conta').dataset.codigo;
     const r = alterarConta(codigo, { perfil: e.target.value });
     if (!r.ok) avisar(r.erro);

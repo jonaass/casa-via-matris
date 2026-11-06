@@ -323,3 +323,32 @@ test('página que não existe ou sem sessão não abre', async () => {
   assert.equal(podeVerPagina('nao-existe'), false);
   assert.equal(podeVerPagina('constructor'), false); // nome que existe em todo objeto do JavaScript
 });
+
+test('endereço da página: vazio, antigo, malformado, inexistente e sem permissão', async () => {
+  await entrarComo('voluntario');
+  assert.deepEqual(paginaDoEndereco(''), { pagina: 'inicio' });
+  assert.deepEqual(paginaDoEndereco('#/estoque'), { pagina: 'estoque' });
+  assert.deepEqual(paginaDoEndereco('#despensa'), { pagina: 'estoque' }); // atalho da versão antiga
+  assert.deepEqual(paginaDoEndereco('#/%E0'), { pagina: 'nao-encontrada' });
+  assert.deepEqual(paginaDoEndereco('#/xyz'), { pagina: 'nao-encontrada' });
+  assert.deepEqual(paginaDoEndereco('#/constructor'), { pagina: 'nao-encontrada' });
+  assert.deepEqual(paginaDoEndereco('#/acessos'), { pagina: 'sem-permissao', pedida: 'acessos' });
+  assert.deepEqual(paginaDoEndereco('#/historico'), { pagina: 'sem-permissao', pedida: 'historico' });
+});
+
+test('sessão vencida: nenhuma página abre', async () => {
+  await criarAdministrador(ADMIN);
+  assert.deepEqual(paginaDoEndereco('#/acessos'), { pagina: 'acessos' });
+  const t = agoraReal();
+  Date.now = () => t + 9 * 60 * 60 * 1000; // passou das 8 horas
+  assert.equal(paginaDoEndereco('#/inicio').pagina, 'sem-permissao');
+  assert.equal(pode('administrar'), false);
+});
+
+test('toque duplo em Cadastrar não cria duas contas com o mesmo e-mail', async () => {
+  await criarAdministrador(ADMIN);
+  const dados = { nome: 'Bia', email: 'bia@casa.org', perfil: 'voluntario' };
+  const [a, b] = await Promise.all([criarConta(dados), criarConta(dados)]);
+  assert.equal([a, b].filter((r) => r.ok).length, 1);
+  assert.equal(listarContas().filter((c) => c.email === 'bia@casa.org').length, 1);
+});

@@ -156,6 +156,23 @@
     return !p.precisa.length || p.precisa.some(pode);
   }
 
+  // Endereços da versão de página única, para atalhos salvos continuarem abrindo.
+  const ENDERECOS_ANTIGOS = { resumo: 'inicio', despensa: 'estoque', usuarios: 'acessos', conteudo: 'inicio' };
+  const tem = (objeto, chave) => Object.prototype.hasOwnProperty.call(objeto, chave);
+
+  /**
+   * Qual página abrir para um endereço como "#/estoque". Devolve { pagina } e, quando a pessoa
+   * não pode ver a página pedida, { pagina: 'sem-permissao', pedida }.
+   */
+  function paginaDoEndereco(hash) {
+    let nome = String(hash ?? '').replace(/^#\/?/, '');
+    try { nome = decodeURIComponent(nome); } catch (e) { return { pagina: 'nao-encontrada' }; } // como #/%E0
+    nome = nome || 'inicio';
+    if (tem(ENDERECOS_ANTIGOS, nome)) nome = ENDERECOS_ANTIGOS[nome];
+    if (!tem(PAGINAS, nome)) return { pagina: 'nao-encontrada' };
+    return podeVerPagina(nome) ? { pagina: nome } : { pagina: 'sem-permissao', pedida: nome };
+  }
+
   function sair(registrar = true) {
     if (registrar && contaAtual()) registrarAuditoria('Saiu do sistema');
     sessaoGuardada().forEach((espaco) => espaco.removeItem(CHAVE_SESSAO));
@@ -285,6 +302,9 @@
       codigo: gerarCodigo(), nome: nome.trim().slice(0, 80), email: normalizar(email), perfil, ativo: true,
       provisoria: true, tentativas: 0, bloqueadoAte: 0, criadoEm: new Date().toISOString(), senha: await novaSenhaGuardada(senhaProvisoria),
     };
+    // Confere de novo: durante o cálculo da senha, um segundo toque pode ter cadastrado o mesmo e-mail.
+    const erroDepois = erroDosDados({ nome, email, perfil });
+    if (erroDepois) return falha(erroDepois);
     const salvo = gravar([...contas(), conta]);
     if (!salvo.ok) return salvo;
     registrarAuditoria('Cadastrou uma pessoa', `${conta.nome} (${PERFIS[perfil].rotulo})`);
@@ -350,7 +370,7 @@
   }
 
   Object.assign(globalThis, {
-    recadosDaCasa, PERFIS, PAGINAS, podeVerPagina, SENHA_MINIMA, temContas: () => contas().length > 0, contaAtual, pode, entrar, sair, trocarSenha, recuperarSenha,
+    recadosDaCasa, PERFIS, PAGINAS, podeVerPagina, paginaDoEndereco, SENHA_MINIMA, temContas: () => contas().length > 0, contaAtual, pode, entrar, sair, trocarSenha, recuperarSenha,
     criarAdministrador, listarContas, criarConta, redefinirSenhaDe, alterarConta, lerAuditoria, registrarAuditoria,
   });
 })();

@@ -308,6 +308,11 @@ main:focus {
   min-width: 0;
 }
 
+.faixa-erro {
+  background: var(--rubi-claro);
+  border-color: var(--rubi);
+}
+
 /* ---------- indicadores ---------- */
 
 .resumo {
@@ -1398,17 +1403,23 @@ select[aria-invalid='true'] {
 }
 
 @media (max-width: 560px) {
-  .resumo {
-    grid-template-columns: 1fr;
+  /* Indicadores em duas colunas: assim "Registrar movimentação" aparece sem rolar. */
+  .indicador-valor {
+    font-size: 1.75rem;
   }
 
-  .indicador {
-    border-left: 0;
-    padding-inline: 0;
+  /* Menu em grade (3 + 2) em vez de rolar para o lado: todas as páginas ficam à vista. */
+  .lateral nav {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    overflow: visible;
+    mask-image: none;
+    padding-right: 0;
   }
 
-  .indicador+.indicador {
-    border-top: 1px solid var(--linha);
+  .lateral nav a {
+    justify-content: center;
+    padding: 0 6px;
   }
 
   .painel {
@@ -1452,7 +1463,8 @@ select[aria-invalid='true'] {
   font-size: clamp(2rem, 1.6rem + 1.6vw, 3rem);
 }
 
-.atalho-registrar {
+.atalho-registrar,
+a.botao {
   justify-self: start;
   text-decoration: none;
   display: inline-flex;

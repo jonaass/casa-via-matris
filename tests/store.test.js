@@ -335,3 +335,35 @@ test('fluxo mensal soma entradas e saídas por mês, com mês vazio em zero', ()
   // A virada de ano não pode quebrar a sequência de meses.
   assert.equal(new Set(meses.map((m) => m.chave)).size, 6);
 });
+
+test('registro incompleto guardado não some quando outro é salvo, e a tela é avisada', () => {
+  localStorage.setItem('via-matris:dinheiro', JSON.stringify([{ tipo: 'entrada_dinheiro', valorCentavos: 100 }]));
+  assert.equal(lerTudo('dinheiro').length, 0);
+  assert.match(problemasDoArmazenamento().join(' '), /1 registro guardado está incompleto/);
+  assert.equal(salvarRegistro('dinheiro', { codigo: 'novo', tipo: 'entrada_dinheiro', valorCentavos: 500 }).ok, true);
+  const guardadoAgora = JSON.parse(localStorage.getItem('via-matris:dinheiro'));
+  assert.equal(guardadoAgora.length, 2, 'o incompleto continua guardado');
+});
+
+test('dado ilegível sem espaço para a cópia: nada é gravado por cima, e a tela é avisada', () => {
+  localStorage.setItem('via-matris:doacoes', '{estragado');
+  const original = localStorage.setItem;
+  localStorage.setItem = () => { throw new Error('QuotaExceededError'); };
+  assert.deepEqual(lerTudo('doacoes'), []);
+  localStorage.setItem = original;
+  assert.equal(salvarRegistro('doacoes', { codigo: 'x', tipo: 'doacao_item' }).ok, false);
+  assert.equal(localStorage.getItem('via-matris:doacoes'), '{estragado');
+  assert.match(problemasDoArmazenamento().join(' '), /ilegível/);
+  localStorage.removeItem('via-matris:doacoes');
+  assert.deepEqual(problemasDoArmazenamento(), []);
+});
+
+test('a leitura guardada em memória acompanha o que outra aba gravou', () => {
+  salvarRegistro('itens', { codigo: 'a', nome: 'Arroz' });
+  assert.deepEqual(lerTudo('itens').map((i) => i.codigo), ['a']);
+  localStorage.setItem('via-matris:itens', JSON.stringify([{ codigo: 'b', nome: 'Feijão' }]));
+  assert.deepEqual(lerTudo('itens').map((i) => i.codigo), ['b']);
+  const copia = lerTudo('itens');
+  copia[0].nome = 'mudado';
+  assert.equal(lerTudo('itens')[0].nome, 'Feijão', 'mexer na cópia não muda o guardado');
+});

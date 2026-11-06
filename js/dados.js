@@ -16,8 +16,8 @@
  * Cada registro tem um "codigo" único (gerado por gerarCodigo, nas Regras).
  * O dados.js não confere os outros campos: isso é trabalho das Regras.
  *
- * Toda função lê do armazenamento na hora (não guarda cópia na memória). Assim,
- * duas abas abertas não apagam o que a outra gravou.
+ * Toda função lê do armazenamento na hora. Assim, duas abas abertas não apagam o que a outra
+ * gravou. Só a conversão do texto guardado fica em memória, e só enquanto o texto não muda.
  *
  * Este arquivo também é carregado pelo sw.js, só para ler a VERSAO.
  * Por isso nada aqui fora das funções pode usar window ou localStorage.
@@ -26,7 +26,7 @@
   'use strict';
 
   /** Versão do app. Mude a cada publicação: o sw.js usa ela para baixar os arquivos novos. */
-  const VERSAO = '1.1.0';
+  const VERSAO = '1.1.1';
 
   const COLECOES = ['dinheiro', 'doacoes', 'itens'];
   const PREFIXO = 'via-matris:';
@@ -41,6 +41,11 @@
     }
   }
 
+  // Chaves com texto ilegível que não deu para copiar à parte: gravar nelas apagaria o que sobrou.
+  const travadas = new Set();
+  // Última leitura de cada coleção: { bruto, lista }. Vale só enquanto o texto guardado for o mesmo.
+  const memoria = new Map();
+
   function falha(mensagem) {
     return { ok: false, erros: [mensagem] };
   }
@@ -54,9 +59,11 @@
   function lerChave(chave, padrao) {
     const s = armazenamento();
     const bruto = s ? s.getItem(PREFIXO + chave) : null;
-    if (bruto == null) return padrao;
+    if (bruto == null) { travadas.delete(chave); return padrao; }
     try {
-      return JSON.parse(bruto);
+      const valor = JSON.parse(bruto);
+      travadas.delete(chave);
+      return valor;
     } catch (e) {
       // Guarda o texto estragado à parte, para a próxima gravação não apagar de vez.
       console.warn(`Dados de "${chave}" ilegíveis. Uma cópia ficou em ${PREFIXO}${chave}:corrompido.`, e);
@@ -66,6 +73,7 @@
         s.removeItem(PREFIXO + chave);
       } catch (erro) {
         console.warn('Sem espaço para guardar a cópia; os dados ficaram onde estavam.', erro);
+        travadas.add(chave);
       }
       return padrao;
     }
@@ -76,6 +84,9 @@
     const texto = JSON.stringify(valor);
     const s = armazenamento();
     if (!s) return falha('O celular não deixou guardar os dados. Saia da aba anônima ou libere o armazenamento do site.');
+    if (travadas.has(chave)) {
+      return falha('Os dados guardados estão ilegíveis e não há espaço para guardar uma cópia. Nada foi gravado, para não apagá-los. Peça ajuda a quem cuida do sistema.');
+    }
     try {
       s.setItem(PREFIXO + chave, texto);
       return { ok: true };
@@ -129,11 +140,26 @@
     gravarChave('config', { ...lerChave('config', {}), migradoDoPrototipo: new Date().toISOString() });
   }
 
-  function listaDaColecao(colecao) {
+  const temCodigo = (r) => r && typeof r.codigo === 'string' && r.codigo;
+
+  // A coleção como está guardada, inclusive registros sem código. Usada para gravar sem perdê-los.
+  function listaCrua(colecao) {
     migrarDoPrototipo();
-    const lista = lerChave(colecao, []);
-    // Ignora o que não for registro com código, em vez de derrubar a tela.
-    return Array.isArray(lista) ? lista.filter((r) => r && typeof r.codigo === 'string' && r.codigo) : [];
+    const s = armazenamento();
+    const bruto = s ? s.getItem(PREFIXO + colecao) : null;
+    const guardada = memoria.get(colecao);
+    if (guardada && guardada.bruto === bruto) return guardada.lista.slice();
+    const valor = lerChave(colecao, []);
+    const lista = Array.isArray(valor) ? valor : [];
+    // Lista que não é lista (dado estragado) não pode ser regravada por cima.
+    if (!Array.isArray(valor)) travadas.add(colecao);
+    memoria.set(colecao, { bruto, lista });
+    return lista.slice();
+  }
+
+  function listaDaColecao(colecao) {
+    // Ignora o que não for registro com código, em vez de derrubar a tela. O aviso vem de problemasDoArmazenamento.
+    return listaCrua(colecao).filter(temCodigo);
   }
 
   /**
@@ -155,8 +181,8 @@
       return falha('Registro sem código. Gere um com gerarCodigo() antes de salvar.');
     }
     const copia = { ...registro };
-    const lista = listaDaColecao(colecao);
-    const posicao = lista.findIndex((r) => r.codigo === copia.codigo);
+    const lista = listaCrua(colecao);
+    const posicao = lista.findIndex((r) => temCodigo(r) && r.codigo === copia.codigo);
     if (posicao >= 0) lista[posicao] = copia;
     else lista.push(copia);
 
@@ -167,8 +193,8 @@
   /** Apaga o registro com esse código. Devolve { ok: true } ou { ok: false, erros: [...] }. */
   function removerRegistro(colecao, codigo) {
     conferirColecao(colecao);
-    const lista = listaDaColecao(colecao);
-    const restantes = lista.filter((r) => r.codigo !== codigo);
+    const lista = listaCrua(colecao);
+    const restantes = lista.filter((r) => !(temCodigo(r) && r.codigo === codigo));
     if (restantes.length === lista.length) return falha('Esse registro não existe mais.');
     return gravarChave(colecao, restantes);
   }
@@ -184,6 +210,7 @@
     if (!Array.isArray(lista) || lista.some((r) => !r || typeof r.codigo !== 'string' || !r.codigo)) {
       return falha('Lista com registro sem código.');
     }
+    travadas.delete(colecao); // trocar a coleção inteira é decisão de quem restaura ou começa do zero
     return gravarChave(colecao, lista);
   }
 
@@ -234,9 +261,25 @@
     }
   }
 
+  /**
+   * O que a tela precisa avisar sobre o armazenamento: dados ilegíveis, registros ignorados ou
+   * navegador que não deixa guardar. Lista de frases; vazia quando está tudo bem.
+   */
+  function problemasDoArmazenamento() {
+    const s = armazenamento();
+    if (!s) return ['Este navegador não deixa guardar dados: nada do que for registrado ficará salvo. Saia da aba anônima ou libere o armazenamento do site.'];
+    const problemas = [];
+    // Lê as coleções antes: a leitura é que descobre (ou desfaz) o dado ilegível.
+    const ignorados = COLECOES.reduce((t, c) => t + listaCrua(c).filter((r) => !temCodigo(r)).length, 0);
+    const ilegiveis = [...COLECOES, 'config'].filter((c) => travadas.has(c) || s.getItem(`${PREFIXO}${c}:corrompido`) != null);
+    if (ilegiveis.length) problemas.push('Parte dos dados guardados neste aparelho estava ilegível e não aparece na tela. Peça ajuda a quem cuida do sistema antes de apagar qualquer coisa.');
+    if (ignorados) problemas.push(`${ignorados} ${ignorados === 1 ? 'registro guardado está incompleto e não aparece' : 'registros guardados estão incompletos e não aparecem'} na tela. ${ignorados === 1 ? 'Ele continua guardado' : 'Eles continuam guardados'}.`);
+    return problemas;
+  }
+
   // Só estes nomes ficam visíveis para os outros arquivos.
   Object.assign(globalThis, {
     VERSAO, lerTudo, salvarRegistro, removerRegistro, substituirColecao, lerConfig, salvarConfig,
-    aoMudarEmOutraAba, pedirArmazenamentoPersistente,
+    aoMudarEmOutraAba, pedirArmazenamentoPersistente, problemasDoArmazenamento,
   });
 })();

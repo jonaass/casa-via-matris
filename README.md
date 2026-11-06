@@ -136,6 +136,19 @@ Sugestão para o Anthony, alinhada ao que o grupo usa na faculdade:
 
 Encontrados na revisão do protótipo. Os marcados como corrigidos têm teste em `tests/`.
 
+### Corrigidos na 1.1.1
+
+- O eixo do gráfico ia a 4 vezes o maior valor, e as barras ficavam baixas.
+- Os botões "Ir para a Visão geral" das telas "Sem permissão" e "Página não encontrada" saíam sublinhados.
+- Um perfil trocado em outra aba não atualizava o menu nesta.
+- Com a sessão vencida, as ações de administrador mostravam "Seu perfil não pode fazer isso" em vez de voltar para a entrada.
+- No celular, "Histórico" e "Acessos" ficavam escondidos numa rolagem do menu. Agora o menu quebra em duas linhas.
+- "Registrar movimentação" fica antes dos indicadores, à vista sem rolar.
+- No toque, a dica do gráfico sumia assim que o dedo saía da tela. Agora fica até tocar fora; Esc também fecha.
+- Dados ilegíveis ou registros incompletos sumiam da tela sem aviso, e o próximo registro podia apagá-los. Agora uma faixa avisa, e nada é gravado por cima.
+- Dois toques rápidos em "Cadastrar" criavam duas contas com o mesmo e-mail.
+- Cada registro relia e convertia todo o armazenamento várias vezes. Agora a conversão fica em memória enquanto o texto guardado não muda.
+
 ### Corrigidos na 1.1.0
 
 - No celular, a tabela do histórico escondia a coluna do valor à direita. Agora cada linha vira um cartão.
@@ -143,7 +156,7 @@ Encontrados na revisão do protótipo. Os marcados como corrigidos têm teste em
 - O administrador que mudava o próprio perfil continuava vendo as páginas do perfil antigo até recarregar.
 - Um endereço malformado (como `#/%E0`) deixava a tela quebrada.
 - Com a sessão vencida e a página aberta, registrar mostrava "Seu perfil não pode fazer isso". Agora volta para a entrada.
-- `Object.hasOwn` e `.at()` não existem em iPhones com iOS anterior ao 15.4 e travariam o app.
+- `Object.hasOwn` e `.at()` não existem em iPhones com iOS anterior ao 15.4 e foram trocados. O app pede iOS 14.5 ou mais novo.
 - O repositório não tinha `.gitignore`. Agora banco, `.env` e planilhas de backup ficam fora do Git.
 
 ### Corrigidos na 1.0
