@@ -352,3 +352,40 @@ test('toque duplo em Cadastrar não cria duas contas com o mesmo e-mail', async 
   assert.equal([a, b].filter((r) => r.ok).length, 1);
   assert.equal(listarContas().filter((c) => c.email === 'bia@casa.org').length, 1);
 });
+
+test('administrador gera um código de recuperação novo, e o antigo deixa de valer', async () => {
+  const { codigoRecuperacao: antigo } = await criarAdministrador(ADMIN);
+  assert.equal((await novoCodigoDeRecuperacao('senha-errada')).ok, false);
+  const r = await novoCodigoDeRecuperacao(ADMIN.senha);
+  assert.equal(r.ok, true);
+  assert.notEqual(r.codigoRecuperacao, antigo);
+  assert.ok(!JSON.stringify([...localStorage.g]).includes(r.codigoRecuperacao), 'o código não fica guardado em texto aberto');
+  sair();
+  assert.equal((await recuperarSenha(ADMIN.email, antigo, 'outra-senha-1')).ok, false);
+  assert.equal((await recuperarSenha(ADMIN.email, r.codigoRecuperacao, 'outra-senha-1')).ok, true);
+});
+
+test('só o administrador gera código de recuperação', async () => {
+  await entrarComo('financeiro');
+  assert.equal((await novoCodigoDeRecuperacao('senha-da-bia')).ok, false);
+});
+
+test('armazenamento bloqueado pelo navegador não derruba a tela de entrada', () => {
+  const guardados = { localStorage: globalThis.localStorage, sessionStorage: globalThis.sessionStorage };
+  for (const nome of Object.keys(guardados)) {
+    Object.defineProperty(globalThis, nome, { configurable: true, get() { throw new Error('SecurityError'); } });
+  }
+  try {
+    assert.equal(contaAtual(), null);
+    assert.equal(temContas(), false);
+    assert.match(problemasDoArmazenamento()[0], /não deixa guardar/);
+  } finally {
+    for (const [nome, valor] of Object.entries(guardados)) Object.defineProperty(globalThis, nome, { configurable: true, writable: true, value: valor });
+  }
+});
+
+test('a versão nova do app só assume quando o app é reaberto', () => {
+  const sw = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'sw.js'), 'utf8');
+  // Com skipWaiting, o app.js novo chegava a uma página antiga depois do login, e o painel ficava em branco.
+  assert.ok(!sw.includes('self.skipWaiting('));
+});

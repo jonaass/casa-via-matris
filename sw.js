@@ -7,7 +7,7 @@
  * Como atualizar o app depois de publicado:
  *   1. Mude a VERSAO no js/dados.js (ex.: "1.0.0" → "1.0.1").
  *   2. Publique (git push). Na próxima vez que o celular abrir o app com internet,
- *      ele baixa tudo de novo; na vez seguinte já abre a versão nova.
+ *      ele baixa tudo de novo; depois de fechar e abrir o app, já é a versão nova.
  * Sem mudar a VERSAO, o celular continua usando os arquivos antigos guardados.
  *
  * A lista ARQUIVOS tem que bater com os arquivos que existem no site: se faltar um,
@@ -43,11 +43,13 @@ const SERVIDORES_DE_FONTES = ['fonts.googleapis.com', 'fonts.gstatic.com'];
 
 // Instalação: baixa todos os arquivos da versão nova. Se faltar um, a instalação falha
 // e o celular continua com a versão anterior, que funciona.
+// Sem skipWaiting de propósito: a versão nova só assume quando o app é fechado e aberto de novo.
+// Assumir com a página aberta entregava o app.js novo (carregado depois do login) para uma
+// página ainda antiga, e o painel ficava em branco.
 self.addEventListener('install', (evento) => {
   evento.waitUntil(
     caches.open(CACHE)
-      .then((cache) => cache.addAll(ARQUIVOS.map((a) => new Request(a, { cache: 'reload' }))))
-      .then(() => self.skipWaiting()),
+      .then((cache) => cache.addAll(ARQUIVOS.map((a) => new Request(a, { cache: 'reload' })))),
   );
 });
 

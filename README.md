@@ -136,6 +136,17 @@ Sugestão para o Anthony, alinhada ao que o grupo usa na faculdade:
 
 Encontrados na revisão do protótipo. Os marcados como corrigidos têm teste em `tests/`.
 
+### Corrigidos na 1.1.2
+
+Vieram da auditoria de 10/11/2026.
+
+- Depois de uma publicação, quem fazia login recebia o `app.js` novo numa página ainda antiga, e o painel ficava em branco. Agora a versão nova só assume quando o app é fechado e aberto de novo.
+- O código de recuperação aparecia uma vez só e não dava para gerar outro. O menu Conta ganhou "Novo código de recuperação", que pede a senha.
+- Com o armazenamento bloqueado pelo navegador, a tela de entrada não aparecia. Agora ela explica o que liberar.
+- Num aparelho sempre ligado, a data do formulário ficava no dia anterior depois da meia-noite.
+- Depois de Sair, a próxima pessoa podia cair em "Sem permissão", porque o endereço da página anterior continuava.
+- Trocar senha com a sessão vencida mostrava um erro sem saída. Agora volta para a entrada.
+
 ### Corrigidos na 1.1.1
 
 - O eixo do gráfico ia a 4 vezes o maior valor, e as barras ficavam baixas.

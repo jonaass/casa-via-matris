@@ -348,6 +348,7 @@
     evento.preventDefault();
     // Sessão vencida com a página aberta: volta para a entrada, em vez de dizer "seu perfil não pode".
     if (conferirSessao()) return;
+    atualizarData(); // o dia pode ter virado com a tela aberta
     const tipo = tipoAtual();
     const dados = Object.fromEntries(new FormData(form));
     const entrada = {
@@ -721,8 +722,10 @@
     document.querySelector('.pagina:not([hidden]) h1')?.focus();
   });
 
-  $('conta-sair').addEventListener('click', () => { sair(); location.reload(); });
+  // Sai sem levar o endereço da página: a próxima pessoa começa na Visão geral, não em "Sem permissão".
+  $('conta-sair').addEventListener('click', () => { sair(); location.replace(location.pathname); });
   $('conta-senha').addEventListener('click', () => { $('opcoes').open = false; abrirTrocaDeSenha(); });
+  $('conta-codigo').addEventListener('click', () => { if (conferirSessao()) return; $('opcoes').open = false; abrirNovoCodigo(); });
   window.addEventListener('acesso-aviso', (e) => avisar(e.detail));
 
   // ---------- pessoas com acesso ----------
@@ -837,6 +840,8 @@
 
   // No celular o app volta do segundo plano sem recarregar, às vezes dias depois.
   document.addEventListener('visibilitychange', () => { if (!document.hidden) { conferirSessao(); atualizarData(); } });
+  // Aparelho que fica ligado o dia todo: a data vira à meia-noite sem ninguém tocar na tela.
+  setInterval(atualizarData, 60000);
 
   pedirArmazenamentoPersistente();
 })();

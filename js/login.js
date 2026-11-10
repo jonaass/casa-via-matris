@@ -45,6 +45,13 @@
       botao: 'Salvar nova senha',
       voltar: 'Cancelar',
     },
+    codigo: {
+      titulo: 'Novo código de recuperação',
+      apoio: 'Confirme a sua senha. O código antigo deixa de valer, e o novo aparece uma vez só.',
+      campos: ['senha'],
+      botao: 'Gerar código',
+      voltar: 'Cancelar',
+    },
   };
 
   let modo = 'entrar';
@@ -144,6 +151,13 @@
       if (!r.ok) return mostrarErro(r.erro);
       return mostrarCodigo(r.codigoRecuperacao, abrirApp);
     }
+    // Sessão vencida com esta tela aberta: volta para a entrada, em vez de um erro sem saída.
+    if (!contaAtual()) { location.reload(); return; }
+    if (modo === 'codigo') {
+      const r = await novoCodigoDeRecuperacao(v.senha);
+      if (!r.ok) { $('a-senha').value = ''; return mostrarErro(r.erro); }
+      return mostrarCodigo(r.codigoRecuperacao, () => voltarAoApp('Código de recuperação trocado.'));
+    }
     const r = await trocarSenha(contaAtual().email, v.senha, v.nova);
     if (!r.ok) return mostrarErro(r.erro);
     voltarAoApp('Senha trocada.');
@@ -178,7 +192,7 @@
 
   $('a-esqueci').addEventListener('click', () => irPara('esqueci'));
   $('a-voltar').addEventListener('click', () => {
-    if (modo === 'trocar') voltarAoApp();
+    if (modo === 'trocar' || modo === 'codigo') voltarAoApp();
     else { provisoria = null; irPara('entrar'); }
   });
 
@@ -188,11 +202,13 @@
     if (aviso) window.dispatchEvent(new CustomEvent('acesso-aviso', { detail: aviso }));
   }
 
-  window.abrirTrocaDeSenha = () => {
+  const abrirTelaDaConta = (qual) => () => {
     document.querySelector('.app').hidden = true;
     $('tela-acesso').hidden = false;
-    irPara('trocar');
+    irPara(qual);
   };
+  window.abrirTrocaDeSenha = abrirTelaDaConta('trocar');
+  window.abrirNovoCodigo = abrirTelaDaConta('codigo');
 
   function desenharRecados() {
     $('recados').replaceChildren(...recadosDaCasa().map(({ titulo, texto }) => {
@@ -219,6 +235,14 @@
   }
   desenharRecados();
   $('tela-acesso').hidden = false;
+  let guarda = false;
+  try { guarda = Boolean(globalThis.localStorage); } catch (e) { /* cookies bloqueados */ }
+  if (!guarda) {
+    form.hidden = true;
+    $('acesso-titulo').textContent = 'Libere o armazenamento';
+    $('acesso-apoio').textContent = problemasDoArmazenamento()[0];
+    return;
+  }
   if (!globalThis.crypto?.subtle) {
     form.hidden = true;
     $('acesso-titulo').textContent = 'Abra pelo endereço seguro';

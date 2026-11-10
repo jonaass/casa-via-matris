@@ -70,7 +70,9 @@
   const contas = () => { const c = lerConfig().contas; return Array.isArray(c) ? c : []; };
   const normalizar = (email) => String(email ?? '').trim().toLocaleLowerCase('pt-BR');
   const emailValido = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && email.length <= 120;
-  const sessaoGuardada = () => [globalThis.sessionStorage, globalThis.localStorage].filter(Boolean);
+  // Com cookies bloqueados, alguns navegadores dão erro só de olhar o armazenamento.
+  const espaco = (nome) => { try { return globalThis[nome] || null; } catch (e) { return null; } };
+  const sessaoGuardada = () => [espaco('sessionStorage'), espaco('localStorage')].filter(Boolean);
 
   function gravar(lista, extra = {}) {
     const r = salvarConfig({ contas: lista, ...extra });
@@ -127,8 +129,8 @@
 
   function abrirSessao(conta, manter) {
     sair(false);
-    const espaco = manter ? globalThis.localStorage : (globalThis.sessionStorage ?? globalThis.localStorage);
-    espaco.setItem(CHAVE_SESSAO, JSON.stringify({ contaCodigo: conta.codigo, expiraEm: Date.now() + (manter ? SESSAO_LONGA_MS : SESSAO_CURTA_MS) }));
+    const onde = manter ? espaco('localStorage') : (espaco('sessionStorage') ?? espaco('localStorage'));
+    onde.setItem(CHAVE_SESSAO, JSON.stringify({ contaCodigo: conta.codigo, expiraEm: Date.now() + (manter ? SESSAO_LONGA_MS : SESSAO_CURTA_MS) }));
   }
 
   /** A conta da sessão aberta, ou null. Sessão vencida, conta desativada ou provisória não contam. */
@@ -283,6 +285,23 @@
     return { ok: true, codigoRecuperacao };
   }
 
+  /**
+   * Troca o código de recuperação por um novo, mostrado uma vez. Para quem perdeu o papel ou
+   * fechou a tela antes de anotar. Exige a senha atual, mesmo com a sessão aberta.
+   */
+  async function novoCodigoDeRecuperacao(senhaAtual) {
+    const atual = contaAtual();
+    if (!atual || !pode('administrar')) return semPermissao();
+    const r = await validar(atual.email, senhaAtual);
+    if (!r.ok) return r;
+    limparTentativas(r.conta);
+    const codigoRecuperacao = gerarCodigoRecuperacao();
+    const salvo = salvarConfig({ recuperacao: await novaSenhaGuardada(codigoRecuperacao) });
+    if (!salvo.ok) return falha(salvo.erros[0]);
+    registrarAuditoria('Gerou novo código de recuperação');
+    return { ok: true, codigoRecuperacao };
+  }
+
   // ---------- administração ----------
 
   const semPermissao = () => falha('Só o administrador pode fazer isso.');
@@ -371,6 +390,6 @@
 
   Object.assign(globalThis, {
     recadosDaCasa, PERFIS, PAGINAS, podeVerPagina, paginaDoEndereco, SENHA_MINIMA, temContas: () => contas().length > 0, contaAtual, pode, entrar, sair, trocarSenha, recuperarSenha,
-    criarAdministrador, listarContas, criarConta, redefinirSenhaDe, alterarConta, lerAuditoria, registrarAuditoria,
+    criarAdministrador, novoCodigoDeRecuperacao, listarContas, criarConta, redefinirSenhaDe, alterarConta, lerAuditoria, registrarAuditoria,
   });
 })();
