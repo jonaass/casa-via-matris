@@ -18,11 +18,11 @@
 importScripts('js/dados.js'); // só para ler a VERSAO; um lugar só para mudar
 
 const CACHE = 'via-matris-' + VERSAO;
-const CACHE_FONTES = 'via-matris-fontes'; // não muda com a versão: as fontes são sempre as mesmas
 
 const ARQUIVOS = [
   './',
   'index.html',
+  'termos.html',
   'css/styles.css',
   'js/utilitarios.js',
   'js/dados.js',
@@ -36,10 +36,12 @@ const ARQUIVOS = [
   'icones/icone-512.png',
   'icones/icone-maskable-512.png',
   'icones/icone-apple-180.png',
+  // As fontes ficam no próprio site: nenhum pedido sai para o Google Fonts.
+  'fontes/atkinson-hyperlegible-latin-400-normal.woff2',
+  'fontes/atkinson-hyperlegible-latin-700-normal.woff2',
+  'fontes/hanken-grotesk-latin-300-normal.woff2',
+  'fontes/hanken-grotesk-latin-600-normal.woff2',
 ];
-
-// As fontes do front (Atkinson Hyperlegible e Hanken Grotesk) vêm do Google Fonts.
-const SERVIDORES_DE_FONTES = ['fonts.googleapis.com', 'fonts.gstatic.com'];
 
 // Instalação: baixa todos os arquivos da versão nova. Se faltar um, a instalação falha
 // e o celular continua com a versão anterior, que funciona.
@@ -59,7 +61,8 @@ self.addEventListener('activate', (evento) => {
   evento.waitUntil(
     caches.keys()
       .then((nomes) => Promise.all(
-        nomes.filter((n) => n.startsWith('via-matris-') && n !== CACHE && n !== CACHE_FONTES)
+        // Também apaga o antigo "via-matris-fontes", do tempo em que as fontes vinham do Google.
+        nomes.filter((n) => n.startsWith('via-matris-') && n !== CACHE)
           .map((n) => caches.delete(n)),
       ))
       .then(() => self.clients.claim()),
@@ -70,22 +73,6 @@ self.addEventListener('fetch', (evento) => {
   const pedido = evento.request;
   if (pedido.method !== 'GET') return;
   const url = new URL(pedido.url);
-
-  // Fontes: guarda na primeira vez que aparecem com internet, e usa a guardada depois.
-  if (SERVIDORES_DE_FONTES.includes(url.hostname)) {
-    evento.respondWith(
-      caches.open(CACHE_FONTES).then(async (cache) => {
-        const guardada = await cache.match(pedido);
-        if (guardada) return guardada;
-        // Modo cors para enxergar o status: uma resposta "opaca" esconde se deu erro,
-        // e um erro guardado aqui ficaria sendo servido para sempre.
-        const resposta = await fetch(url.href, { mode: 'cors', credentials: 'omit' });
-        if (resposta.ok) cache.put(pedido, resposta.clone());
-        return resposta;
-      }),
-    );
-    return;
-  }
 
   if (url.origin !== self.location.origin) return;
 

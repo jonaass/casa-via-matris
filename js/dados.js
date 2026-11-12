@@ -26,7 +26,7 @@
   'use strict';
 
   /** Versão do app. Mude a cada publicação: o sw.js usa ela para baixar os arquivos novos. */
-  const VERSAO = '1.1.2';
+  const VERSAO = '1.2.0';
 
   const COLECOES = ['dinheiro', 'doacoes', 'itens'];
   const PREFIXO = 'via-matris:';

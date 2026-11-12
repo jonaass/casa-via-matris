@@ -304,8 +304,10 @@
     const t = textosPorTipo[tipo];
     // Deixa claro o que pode ficar em branco, para ninguém travar num campo que não é obrigatório.
     $('r-pessoa').replaceChildren(t.pessoa, ' ', el('span', { class: 'opcional' }, '(se quiser)'));
-    $('f-pessoa-dica').hidden = tipo !== 'entrada_dinheiro';
-    $('f-pessoa').placeholder = tipo === 'entrada_dinheiro' ? DOADOR_ANONIMO : '';
+    // Doação de itens ou de dinheiro sem nome fica como "Doador anônimo" (regra no store.js).
+    const doacao = tipo === 'entrada_dinheiro' || tipo === 'doacao_item';
+    $('f-pessoa-dica').hidden = !doacao;
+    $('f-pessoa').placeholder = doacao ? DOADOR_ANONIMO : '';
     $('r-descricao').replaceChildren(t.descricao, t.descricaoOpcional ? ' ' : '', t.descricaoOpcional ? el('span', { class: 'opcional' }, '(se quiser)') : '');
     $('f-enviar').textContent = t.botao;
     const item = store.item($('f-item').value);
@@ -746,7 +748,11 @@
         el('span', {}, c.email),
         c.bloqueada && el('span', { class: 'etiqueta saida_item' }, 'Bloqueada'),
         c.provisoria && el('span', { class: 'etiqueta doacao_item' }, 'Senha provisória'),
-        !c.ativo && el('span', { class: 'etiqueta saida_item' }, 'Desativada')),
+        !c.ativo && el('span', { class: 'etiqueta saida_item' }, 'Desativada'),
+        // Quem aceitou os termos e quando: é a prova do aceite, caso a casa precise mostrar.
+        c.termosAceitosEm
+          ? el('span', { class: 'conta-termos' }, `Aceitou os termos em ${new Date(c.termosAceitosEm).toLocaleDateString('pt-BR')}`)
+          : el('span', { class: 'etiqueta saida_item' }, 'Termos ainda não aceitos')),
       el('div', { class: 'conta-acoes' },
         el('label', {}, el('span', { class: 'visualmente-oculto' }, `Perfil de ${c.nome}`), el('select', { 'data-acao': 'perfil' }, opcoesPerfil(c.perfil))),
         c.codigo !== conta.codigo && el('button', { type: 'button', class: 'botao-fantasma', 'data-acao': 'senha' }, 'Gerar senha'),

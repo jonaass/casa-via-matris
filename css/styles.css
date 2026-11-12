@@ -1,4 +1,41 @@
 /*
+ * Fontes servidas pelo próprio site (pasta fontes/, licença SIL OFL 1.1).
+ * Antes vinham do Google Fonts, que recebia o IP de cada pessoa que abria o app.
+ * Só o alfabeto latino básico: cobre todos os acentos do português.
+ */
+@font-face {
+  font-family: 'Atkinson Hyperlegible';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('../fontes/atkinson-hyperlegible-latin-400-normal.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Atkinson Hyperlegible';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('../fontes/atkinson-hyperlegible-latin-700-normal.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Hanken Grotesk';
+  font-style: normal;
+  font-weight: 300;
+  font-display: swap;
+  src: url('../fontes/hanken-grotesk-latin-300-normal.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Hanken Grotesk';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('../fontes/hanken-grotesk-latin-600-normal.woff2') format('woff2');
+}
+
+/*
  * A casa de noite, com a luz acesa: fundo azul-noite e um brilho quente no topo.
  * Quem usa é a equipe e os voluntários da casa, então as cores têm significado fixo:
  *   jade      = está tudo bem
@@ -127,6 +164,9 @@ p {
 .app {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
+  /* auto 1fr: a sobra de altura das páginas curtas vai para o conteúdo, não para o menu
+     (antes, em "Página não encontrada", o menu esticava até 274 px de altura). */
+  grid-template-rows: auto 1fr;
   min-height: 100vh;
 }
 
@@ -1450,8 +1490,20 @@ select[aria-invalid='true'] {
   align-content: start;
 }
 
-.pagina-estreita {
+/* Nas páginas de coluna estreita, as faixas de aviso acompanham a coluna: uma borda esquerda só.
+   Navegador sem :has (antigos) só mantém a faixa larga, como antes. */
+main:has(> .pagina-estreita:not([hidden])) > .faixa {
+  width: 100%;
   max-width: 680px;
+  justify-self: center;
+}
+
+.pagina-estreita {
+  /* Formulário e avisos curtos ficam no centro: numa tela larga, uma coluna estreita
+     encostada à esquerda deixava um vazio grande à direita. O texto continua alinhado à esquerda. */
+  width: 100%;
+  max-width: 680px;
+  justify-self: center;
 }
 
 .topo-pagina {
@@ -1735,4 +1787,95 @@ a.botao {
   .legenda {
     width: 100%;
   }
+}
+
+
+/* ---------- termos ---------- */
+
+.campo-termos .marcar {
+  align-items: flex-start;
+  line-height: 1.45;
+}
+
+.campo-termos .marcar input {
+  margin-top: 2px;
+  flex: none;
+}
+
+.campo-termos a,
+.acesso-nota a {
+  color: var(--calendula-texto);
+  text-underline-offset: 3px;
+}
+
+.conta-termos {
+  font-size: 0.875rem;
+  color: var(--suave);
+}
+
+/* Página termos.html: leitura confortável, uma coluna de até ~70 caracteres. */
+.termos {
+  max-width: 760px;
+  gap: 28px;
+}
+
+.termos section {
+  display: grid;
+  gap: 14px;
+}
+
+.termos h2 {
+  font-size: 1.5rem;
+  line-height: 1.15;
+}
+
+.termos p,
+.termos li {
+  max-width: 68ch;
+  line-height: 1.6;
+}
+
+.termos-aba {
+  color: var(--suave);
+  font-size: 0.9375rem;
+}
+
+.termos ul,
+.termos ol {
+  margin: 0;
+  padding-left: 1.4em;
+  display: grid;
+  gap: 6px;
+}
+
+.termos a:not(.botao) {
+  color: var(--calendula-texto);
+  text-underline-offset: 3px;
+}
+
+.termos-voltar {
+  justify-self: start;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+}
+
+.termos-resumo,
+.termos-destaque {
+  padding: 20px 22px;
+  border-radius: var(--raio-grande);
+  background: var(--superficie);
+  border: 1px solid var(--linha);
+}
+
+.termos-destaque {
+  background: var(--calendula-fundo);
+  border-color: var(--calendula);
+}
+
+.termos-fim {
+  justify-self: start;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
 }

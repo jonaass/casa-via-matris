@@ -7,13 +7,12 @@
   <title>Casa Via Matris | Gestão de recursos</title>
   <meta name="description"
     content="Sistema de controle de estoque, doações e finanças da Casa Via Matris.">
-  <!-- CSP: só aceita scripts deste próprio site e fontes do Google. Barra injeção de script de terceiros. -->
+  <!-- CSP: só aceita arquivos deste próprio site. As fontes ficam na pasta fontes/: nenhum dado
+       de quem abre o app vai para outro servidor (antes, o Google Fonts recebia o IP de cada visita). -->
   <meta http-equiv="Content-Security-Policy"
-    content="default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; base-uri 'none'; form-action 'self'">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet"
-    href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Hanken+Grotesk:wght@300;600&display=swap">
+    content="default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:; connect-src 'self'; base-uri 'none'; form-action 'self'">
+  <link rel="preload" href="fontes/atkinson-hyperlegible-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="fontes/hanken-grotesk-latin-300-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="css/styles.css">
   <!-- Faz o site instalar no celular como um app (o registro do sw.js fica no app.js, porque a CSP bloqueia script inline). -->
   <link rel="manifest" href="manifest.json">
@@ -79,6 +78,12 @@
                 <button type="button" class="olho" aria-label="Mostrar senha" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#icone-olho" /></svg></button>
               </div>
             </div>
+          <div class="campo-termos" data-campo="termos">
+            <label class="marcar">
+              <input type="checkbox" id="a-aceite" name="aceite">
+              <span>Li e aceito os <a href="termos.html" target="_blank" rel="noopener">Termos de uso e o Aviso de privacidade</a> (abre em outra aba).</span>
+            </label>
+          </div>
           <div class="acesso-opcoes" data-campo="opcoes">
             <label class="marcar"><input type="checkbox" name="manter"><span>Manter conectado</span></label>
             <button type="button" class="link" id="a-esqueci">Esqueci a senha</button>
@@ -92,7 +97,8 @@
           <button type="button" class="botao" id="a-guardei">Já guardei o código</button>
         </div>
         <button type="button" class="link acesso-voltar" id="a-voltar" hidden></button>
-        <p class="acesso-nota">Os dados ficam só neste aparelho. Não registre nomes de pessoas acolhidas nem documentos.</p>
+        <p class="acesso-nota">Os dados ficam só neste aparelho. Não registre nomes de pessoas acolhidas nem documentos.
+          <a href="termos.html" target="_blank" rel="noopener">Termos de uso e privacidade</a>.</p>
       </div>
     </section>
 
@@ -147,6 +153,7 @@
         <p><strong id="conta-nome"></strong><br><span id="conta-perfil"></span></p>
         <button type="button" class="botao-fantasma" id="conta-senha">Trocar senha</button>
         <button type="button" class="botao-fantasma" id="conta-sair">Sair</button>
+        <a class="botao-fantasma" href="termos.html" target="_blank" rel="noopener">Termos e privacidade</a>
         <div class="area-admin" id="area-admin" hidden>
         <button type="button" class="botao-fantasma" id="conta-codigo">Novo código de recuperação</button>
         <p id="backup-quando"></p>

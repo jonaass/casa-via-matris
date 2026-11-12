@@ -300,16 +300,18 @@ test('lançar algo por cima dos exemplos protege esses dados de serem apagados n
   assert.equal(s.temExemplos(), true);
 });
 
-test('entrada de dinheiro sem nome vira "Doador anônimo"; com nome, fica o nome', () => {
+test('entrada de dinheiro e doação de itens sem nome viram "Doador anônimo"; com nome, fica o nome', () => {
   const s = criarStore();
   for (const pessoa of [undefined, '', '   ']) {
     const r = s.registrar({ tipo: 'entrada_dinheiro', valor: '10', descricao: 'Pix', pessoa });
     assert.equal(r.movimento.pessoa, 'Doador anônimo');
   }
   assert.equal(s.registrar({ tipo: 'entrada_dinheiro', valor: '10', descricao: 'Pix', pessoa: ' Maria ' }).movimento.pessoa, 'Maria');
-  // Despesa e doação de itens sem nome continuam sem nome: lá a pessoa não é doador de dinheiro.
+  assert.equal(s.registrar({ tipo: 'doacao_item', itemId: 'arroz', quantidade: 1 }).movimento.pessoa, 'Doador anônimo');
+  assert.equal(s.registrar({ tipo: 'doacao_item', itemId: 'arroz', quantidade: 1, pessoa: 'Mercado' }).movimento.pessoa, 'Mercado');
+  // Despesa e saída de itens sem nome continuam sem nome: ali "quem" não é um doador.
   assert.equal(s.registrar({ tipo: 'saida_dinheiro', valor: '1', descricao: 'Pão' }).movimento.pessoa, '');
-  assert.equal(s.registrar({ tipo: 'doacao_item', itemId: 'arroz', quantidade: 1 }).movimento.pessoa, '');
+  assert.equal(s.registrar({ tipo: 'saida_item', itemId: 'arroz', quantidade: 1 }).movimento.pessoa, '');
 });
 
 test('fluxo mensal soma entradas e saídas por mês, com mês vazio em zero', () => {

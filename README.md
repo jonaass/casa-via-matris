@@ -3,7 +3,12 @@
 Projeto de extensão (ODS 10): sistema de controle de **estoque, doações e finanças**
 da Casa Via Matris. Funciona no navegador, instala no celular como um app e abre sem internet.
 
-## Versão 1.1
+## Versão 1.2
+
+Na 1.2.0 entraram os **Termos de uso e o Aviso de privacidade** (`termos.html`), com aceite
+obrigatório e registrado em cada conta. As fontes passaram a ser servidas pelo próprio site, então
+o app não envia nada a outros servidores e não usa cookies. Doações de itens sem nome também ficam
+como "Doador anônimo", e a página Registrar fica centralizada.
 
 Na 1.1.0 o painel deixou de ser uma página única e longa: cada assunto tem a própria página.
 Também entraram o gráfico de entradas e saídas, o filtro de mês no histórico, a tabela de acessos
@@ -46,6 +51,14 @@ mesmo se eles falharem: confira a aba depois de enviar.
 
 ## O que já funciona
 
+- **Termos de uso e privacidade**: `termos.html` explica, em linguagem simples, onde ficam os dados,
+  o que não pode ser registrado (dados de pessoas acolhidas), as responsabilidades e os direitos da LGPD.
+  Criar o administrador e o primeiro acesso de cada pessoa exigem marcar o aceite. O aceite fica guardado
+  na conta com a data, e a página Acessos mostra quem aceitou e quando. Ao mudar o texto dos termos, mude
+  `TERMOS_VERSAO` em `js/acesso.js`: todo mundo aceita de novo na próxima entrada.
+- **Sem cookies e sem terceiros**: o app não grava cookies nem usa rastreamento. Ele usa só o armazenamento
+  do navegador, que é necessário para funcionar, por isso não há aviso de cookies. As fontes ficam em `fontes/`
+  (licença SIL OFL 1.1).
 - **Acesso**: entrada com e-mail e senha. O primeiro acesso no aparelho cria o administrador, que cadastra as outras pessoas com senha provisória. Cinco erros bloqueiam a conta por 15 minutos.
 - **Perfis**:
 
@@ -73,7 +86,7 @@ mesmo se eles falharem: confira a aba depois de enviar.
   "apertados" aparecem primeiro. Dá para buscar pelo nome e filtrar por categoria.
 - **Registrar movimentação**: 4 tipos (doação de itens, saída de itens, entrada de dinheiro,
   despesa). O formulário mostra só os campos daquele tipo. Doações podem cadastrar item novo.
-  Entrada de dinheiro sem nome fica registrada como **"Doador anônimo"** (regra no `store.js`).
+  Doação de itens ou entrada de dinheiro sem nome fica registrada como **"Doador anônimo"** (regra no `store.js`).
 - **Desfazer**: cada linha do histórico tem um botão "Desfazer", com confirmação. Logo depois de registrar, o aviso também oferece o botão por 20 segundos.
   O tempo pausa enquanto o mouse ou o foco do teclado estão em cima do aviso.
 - **Histórico**: filtro por **mês** e por estoque ou dinheiro. Com um mês escolhido, mostra o total
@@ -90,6 +103,8 @@ mesmo se eles falharem: confira a aba depois de enviar.
 
 ```
 index.html          a página (estrutura e textos)
+termos.html         Termos de uso e Aviso de privacidade
+fontes/             as fontes do app e as licenças delas
 css/styles.css      o visual (cores, fontes, layout, celular)
 js/utilitarios.js   datas e quantidades no formato brasileiro
 js/dados.js         a única parte que lê e grava no aparelho
@@ -103,6 +118,8 @@ manifest.json       nome e ícones do app instalado
 tests/              testes automáticos
 ferramentas/        gerar ícones e planilhas de teste
 MIGUEL.md           contrato detalhado de dados.js, backup.js e utilitarios.js
+CLAUDE.md           regras do projeto para o Claude (commits, VERSAO, segurança)
+.claude/agents/     agentes do projeto: publicação, testes, acessos, design, back-end e documentação
 ```
 
 A separação em camadas é a decisão mais importante do projeto: tela (`app.js`) → regras
@@ -135,6 +152,11 @@ Sugestão para o Anthony, alinhada ao que o grupo usa na faculdade:
 ## Riscos
 
 Encontrados na revisão do protótipo. Os marcados como corrigidos têm teste em `tests/`.
+
+### Corrigidos na 1.2.0
+
+- As fontes vinham do Google Fonts, que recebia o IP de cada pessoa que abria o app. Agora ficam no próprio site.
+- Doação de itens sem nome aparecia como "—" no histórico. Agora fica "Doador anônimo", como a entrada de dinheiro.
 
 ### Corrigidos na 1.1.2
 
@@ -198,8 +220,10 @@ Vieram da auditoria de 10/11/2026.
 - **Importação não aplica as regras**: ela restaura registros, sem mexer no estoque nem conferir saldo.
 - **Instalação no Android**: pelo navegador da Samsung, o Play Protect pode bloquear o app. A causa é o pacote gerado por esse navegador, não o site. Instale pelo Chrome; o app mostra uma faixa orientando isso.
 - **VERSAO**: publicar sem mudar a `VERSAO` no `js/dados.js` deixa os celulares na versão antiga.
-- As fontes vêm do Google Fonts, que recebe o IP de cada visitante. Para produção,
-  baixe as fontes e sirva junto com o site.
+- **Termos de uso**: o texto foi escrito para um projeto de extensão e ainda precisa da revisão do professor
+  orientador ou do núcleo de prática jurídica da faculdade. O aceite na tela ajuda, mas o que protege a equipe
+  de verdade é um acordo por escrito com a Casa Via Matris (termo de parceria) dizendo que a casa decide sobre os
+  dados e que o sistema é cedido como está, em teste.
 
 ### Para o back-end (próximas etapas)
 
