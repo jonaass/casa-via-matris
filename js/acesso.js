@@ -54,6 +54,12 @@
     acessos: { rotulo: 'Acessos', precisa: ['administrar'] },
   };
 
+  /*
+   * Versão dos Termos de uso e do Aviso de privacidade (termos.html). Ao mudar o texto dos
+   * termos, mude esta data: todo mundo precisa aceitar de novo na próxima entrada.
+   */
+  const TERMOS_VERSAO = '2026-11-12';
+
   const ITERACOES = 600000; // PBKDF2-SHA256, número recomendado pela OWASP
   const SENHA_MINIMA = 8;
   const SENHA_MAXIMA = 128;
@@ -124,8 +130,16 @@
   // Devolve o que a tela precisa, sem o hash da senha.
   function publica(c) {
     const { codigo, nome, email, perfil, ativo, provisoria, bloqueadoAte } = c;
-    return { codigo, nome, email, perfil, ativo, provisoria: Boolean(provisoria), bloqueada: (bloqueadoAte ?? 0) > Date.now() };
+    return {
+      codigo, nome, email, perfil, ativo, provisoria: Boolean(provisoria), bloqueada: (bloqueadoAte ?? 0) > Date.now(),
+      termosAceitosEm: aceitouOsTermos(c) ? c.termos.em : null,
+    };
   }
+
+  /** Aceitou a versão atual dos termos? Quem aceitou uma versão antiga precisa aceitar de novo. */
+  const aceitouOsTermos = (conta) => conta?.termos?.versao === TERMOS_VERSAO;
+  const aceiteDeAgora = () => ({ termos: { versao: TERMOS_VERSAO, em: new Date().toISOString() } });
+  const ERRO_TERMOS = 'Para continuar, leia e marque que aceita os Termos de uso e o Aviso de privacidade.';
 
   function abrirSessao(conta, manter) {
     sair(false);
@@ -133,14 +147,14 @@
     onde.setItem(CHAVE_SESSAO, JSON.stringify({ contaCodigo: conta.codigo, expiraEm: Date.now() + (manter ? SESSAO_LONGA_MS : SESSAO_CURTA_MS) }));
   }
 
-  /** A conta da sessão aberta, ou null. Sessão vencida, conta desativada ou provisória não contam. */
+  /** A conta da sessão aberta, ou null. Sessão vencida, conta desativada, provisória ou sem o aceite dos termos não contam. */
   function contaAtual() {
     for (const espaco of sessaoGuardada()) {
       let sessao = null;
       try { sessao = JSON.parse(espaco.getItem(CHAVE_SESSAO)); } catch (e) { /* tratada como sessão inexistente */ }
       if (!sessao) continue;
       const conta = contas().find((c) => c.codigo === sessao.contaCodigo);
-      if (conta && conta.ativo && !conta.provisoria && sessao.expiraEm > Date.now()) return publica(conta);
+      if (conta && conta.ativo && !conta.provisoria && aceitouOsTermos(conta) && sessao.expiraEm > Date.now()) return publica(conta);
       espaco.removeItem(CHAVE_SESSAO);
     }
     return null;
@@ -181,19 +195,21 @@
   }
 
   /** Primeira abertura neste aparelho: quem chega primeiro cria o administrador. */
-  async function criarAdministrador({ nome, email, senha }) {
+  async function criarAdministrador({ nome, email, senha, aceitouTermos = false }) {
     if (contas().length) return falha('Este aparelho já tem um administrador.');
-    const erro = erroDosDados({ nome, email, perfil: 'administrador' }) ?? erroDaSenha(senha);
+    const erro = erroDosDados({ nome, email, perfil: 'administrador' }) ?? erroDaSenha(senha) ?? (aceitouTermos === true ? null : ERRO_TERMOS);
     if (erro) return falha(erro);
     const codigoRecuperacao = gerarCodigoRecuperacao();
     const conta = {
       codigo: gerarCodigo(), nome: nome.trim().slice(0, 80), email: normalizar(email), perfil: 'administrador', ativo: true,
       provisoria: false, tentativas: 0, bloqueadoAte: 0, criadoEm: new Date().toISOString(), senha: await novaSenhaGuardada(senha),
+      ...aceiteDeAgora(),
     };
     const salvo = gravar([conta], { recuperacao: await novaSenhaGuardada(codigoRecuperacao) });
     if (!salvo.ok) return salvo;
     abrirSessao(conta, false);
     registrarAuditoria('Criou a conta de administrador');
+    registrarAuditoria('Aceitou os termos', `versão de ${TERMOS_VERSAO}`);
     return { ok: true, codigoRecuperacao };
   }
 
@@ -237,29 +253,50 @@
     return gravar(lista);
   }
 
-  /** { ok: true, conta } | { ok: true, trocarSenha: true } | { ok: false, erro } */
+  /** { ok: true, conta } | { ok: true, trocarSenha: true } | { ok: true, aceitarTermos: true } | { ok: false, erro } */
   async function entrar(email, senha, manter = false) {
     const r = await validar(email, senha);
     if (!r.ok) return r;
     const salvo = limparTentativas(r.conta);
     if (!salvo.ok) return salvo;
     if (r.conta.provisoria) return { ok: true, trocarSenha: true };
+    if (!aceitouOsTermos(r.conta)) return { ok: true, aceitarTermos: true };
     abrirSessao(r.conta, manter);
     registrarAuditoria('Entrou no sistema');
     return { ok: true, conta: publica(r.conta) };
   }
 
-  /** Vale para a senha provisória e para quem quer trocar a própria senha. Exige a senha atual. */
-  async function trocarSenha(email, atual, nova, manter = false) {
+  /**
+   * Vale para a senha provisória e para quem quer trocar a própria senha. Exige a senha atual.
+   * No primeiro acesso (senha provisória), a pessoa também precisa aceitar os termos.
+   */
+  async function trocarSenha(email, atual, nova, manter = false, aceitouTermos = false) {
     const erro = erroDaSenha(nova);
     if (erro) return falha(erro);
     if (nova === atual) return falha('A senha nova precisa ser diferente da atual.');
     const r = await validar(email, atual);
     if (!r.ok) return r;
-    const salvo = limparTentativas(r.conta, { senha: await novaSenhaGuardada(nova), provisoria: false });
+    const aceitaAgora = !aceitouOsTermos(r.conta) && aceitouTermos === true;
+    if (r.conta.provisoria && !aceitouOsTermos(r.conta) && !aceitaAgora) return falha(ERRO_TERMOS);
+    const salvo = limparTentativas(r.conta, { senha: await novaSenhaGuardada(nova), provisoria: false, ...(aceitaAgora ? aceiteDeAgora() : {}) });
     if (!salvo.ok) return salvo;
     if (!contaAtual()) abrirSessao(r.conta, manter);
     registrarAuditoria('Trocou a senha');
+    if (aceitaAgora) registrarAuditoria('Aceitou os termos', `versão de ${TERMOS_VERSAO}`);
+    return { ok: true };
+  }
+
+  /** Quem já tem conta e ainda não aceitou esta versão dos termos. Confere a senha de novo. */
+  async function aceitarTermos(email, senha, manter = false, aceitou = false) {
+    if (aceitou !== true) return falha(ERRO_TERMOS);
+    const r = await validar(email, senha);
+    if (!r.ok) return r;
+    if (r.conta.provisoria) return falha('Crie a sua senha antes de continuar.');
+    const salvo = limparTentativas(r.conta, aceiteDeAgora());
+    if (!salvo.ok) return salvo;
+    abrirSessao(r.conta, manter);
+    registrarAuditoria('Aceitou os termos', `versão de ${TERMOS_VERSAO}`);
+    registrarAuditoria('Entrou no sistema');
     return { ok: true };
   }
 
@@ -389,6 +426,7 @@
   }
 
   Object.assign(globalThis, {
+    TERMOS_VERSAO, aceitarTermos,
     recadosDaCasa, PERFIS, PAGINAS, podeVerPagina, paginaDoEndereco, SENHA_MINIMA, temContas: () => contas().length > 0, contaAtual, pode, entrar, sair, trocarSenha, recuperarSenha,
     criarAdministrador, novoCodigoDeRecuperacao, listarContas, criarConta, redefinirSenhaDe, alterarConta, lerAuditoria, registrarAuditoria,
   });

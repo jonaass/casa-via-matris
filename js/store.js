@@ -22,8 +22,10 @@
   };
   const CATEGORIAS = ['Alimentos', 'Higiene', 'Limpeza'];
   const PREFIXO_EXEMPLO = 'ex-'; // código dos lançamentos de exemplo, para reconhecê-los depois
-  // Entrada de dinheiro sem nome de quem doou: a casa precisa saber que foi de propósito, não esquecimento.
+  // Doação sem nome de quem doou (dinheiro ou itens): a casa precisa saber que foi de propósito,
+  // não esquecimento. Também é o jeito de registrar quem prefere não se identificar (LGPD).
   const DOADOR_ANONIMO = 'Doador anônimo';
+  const TIPOS_DE_DOACAO = ['doacao_item', 'entrada_dinheiro'];
 
   // ---------- utilitários ----------
 
@@ -248,7 +250,6 @@
       if (entrada.tipo === 'saida_dinheiro' && valor > saldoCentavos()) {
         return falha('Saldo insuficiente em caixa para essa despesa. Confira o valor ou registre antes a entrada.');
       }
-      if (entrada.tipo === 'entrada_dinheiro' && !mov.pessoa) mov.pessoa = DOADOR_ANONIMO;
       mov.valorCentavos = valor;
       const salvo = salvarRegistro('dinheiro', mov);
       return salvo.ok ? { ok: true, movimento: mov } : falha(salvo.erros[0]);
@@ -272,6 +273,7 @@
         descricao: texto(entrada.descricao, 120),
         pessoa: texto(entrada.pessoa, 80),
       };
+      if (TIPOS_DE_DOACAO.includes(entrada.tipo) && !mov.pessoa) mov.pessoa = DOADOR_ANONIMO;
       return tipo.area === 'estoque' ? registrarEstoque(entrada, mov, hoje) : registrarDinheiro(entrada, mov);
     }
 

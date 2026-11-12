@@ -15,7 +15,7 @@
     primeiro: {
       titulo: 'Crie a conta do administrador',
       apoio: 'É o primeiro acesso neste aparelho. Com esta conta, você cadastra as outras pessoas da equipe.',
-      campos: ['nome', 'email', 'nova', 'confirmar'],
+      campos: ['nome', 'email', 'nova', 'confirmar', 'termos'],
       botao: 'Criar conta',
     },
     entrar: {
@@ -34,7 +34,7 @@
     provisoria: {
       titulo: 'Crie a sua senha',
       apoio: 'A senha que você recebeu vale só para o primeiro acesso.',
-      campos: ['nova', 'confirmar'],
+      campos: ['nova', 'confirmar', 'termos'],
       botao: 'Salvar senha e entrar',
       voltar: 'Voltar para a entrada',
     },
@@ -44,6 +44,13 @@
       campos: ['senha', 'nova', 'confirmar'],
       botao: 'Salvar nova senha',
       voltar: 'Cancelar',
+    },
+    termos: {
+      titulo: 'Termos de uso e privacidade',
+      apoio: 'Antes de continuar, leia os termos. Eles explicam onde os dados ficam, o que não pode ser registrado e quem responde por quê.',
+      campos: ['termos'],
+      botao: 'Aceitar e entrar',
+      voltar: 'Voltar para a entrada',
     },
     codigo: {
       titulo: 'Novo código de recuperação',
@@ -55,7 +62,7 @@
   };
 
   let modo = 'entrar';
-  let provisoria = null; // e-mail e senha digitados, guardados até a nova senha ser criada
+  let provisoria = null; // e-mail e senha digitados, guardados até a nova senha ser criada ou os termos aceitos
 
   function mostrarErro(msg) {
     $('acesso-erro').textContent = msg;
@@ -81,6 +88,7 @@
       bloco.hidden = !visivel;
       bloco.querySelectorAll('input').forEach((c) => { c.disabled = !visivel; });
     });
+    $('a-aceite').checked = false; // o aceite é sempre um gesto novo, nunca vem marcado
     form.querySelectorAll('input:not([type=checkbox])').forEach((c) => {
       if (c.id !== 'a-email' || novo === 'primeiro') c.value = '';
       c.type = c.dataset.senha === undefined ? c.type : 'password';
@@ -124,9 +132,15 @@
     const v = Object.fromEntries(new FormData(form));
     const precisaNova = MODOS[modo].campos.includes('nova');
     if (precisaNova && v.nova !== v.confirmar) { mostrarErro('As duas senhas não são iguais.'); $('a-confirmar').focus(); return; }
+    const aceitou = $('a-aceite').checked;
+    if (MODOS[modo].campos.includes('termos') && !aceitou) {
+      mostrarErro('Para continuar, marque que leu e aceita os Termos de uso e o Aviso de privacidade.');
+      $('a-aceite').focus();
+      return;
+    }
 
     if (modo === 'primeiro') {
-      const r = await criarAdministrador({ nome: v.nome, email: v.email, senha: v.nova });
+      const r = await criarAdministrador({ nome: v.nome, email: v.email, senha: v.nova, aceitouTermos: aceitou });
       if (!r.ok) return mostrarErro(r.erro);
       return mostrarCodigo(r.codigoRecuperacao, abrirApp);
     }
@@ -134,14 +148,20 @@
       const manter = Boolean(v.manter);
       const r = await entrar(v.email, v.senha, manter);
       if (!r.ok) { $('a-senha').value = ''; $('a-senha').focus(); return mostrarErro(r.erro); }
-      if (r.trocarSenha) {
+      if (r.trocarSenha || r.aceitarTermos) {
         provisoria = { email: v.email, senha: v.senha, manter };
-        return irPara('provisoria');
+        return irPara(r.trocarSenha ? 'provisoria' : 'termos');
       }
       return abrirApp();
     }
     if (modo === 'provisoria') {
-      const r = await trocarSenha(provisoria.email, provisoria.senha, v.nova, provisoria.manter);
+      const r = await trocarSenha(provisoria.email, provisoria.senha, v.nova, provisoria.manter, aceitou);
+      if (!r.ok) return mostrarErro(r.erro);
+      provisoria = null;
+      return abrirApp();
+    }
+    if (modo === 'termos') {
+      const r = await aceitarTermos(provisoria.email, provisoria.senha, provisoria.manter, aceitou);
       if (!r.ok) return mostrarErro(r.erro);
       provisoria = null;
       return abrirApp();
@@ -149,7 +169,14 @@
     if (modo === 'esqueci') {
       const r = await recuperarSenha(v.email, v.codigo, v.nova);
       if (!r.ok) return mostrarErro(r.erro);
-      return mostrarCodigo(r.codigoRecuperacao, abrirApp);
+      // Conta de antes dos termos: depois de anotar o código, ainda precisa aceitar.
+      const email = v.email;
+      const senha = v.nova;
+      return mostrarCodigo(r.codigoRecuperacao, () => {
+        if (contaAtual()) return abrirApp();
+        provisoria = { email, senha, manter: false };
+        return irPara('termos');
+      });
     }
     // Sessão vencida com esta tela aberta: volta para a entrada, em vez de um erro sem saída.
     if (!contaAtual()) { location.reload(); return; }

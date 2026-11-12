@@ -15,7 +15,7 @@ const { criarStore } = require('../js/store.js');
 require('../js/backup.js');
 require('../js/acesso.js');
 
-const ADMIN = { nome: 'Ana', email: 'Ana@Casa.org', senha: 'senha-forte-1' };
+const ADMIN = { nome: 'Ana', email: 'Ana@Casa.org', senha: 'senha-forte-1', aceitouTermos: true };
 const agoraReal = Date.now;
 
 test.beforeEach(() => {
@@ -33,7 +33,7 @@ async function comPessoa(perfil) {
 
 async function entrarComo(perfil) {
   const provisoria = await comPessoa(perfil);
-  assert.equal((await trocarSenha('bia@casa.org', provisoria, 'senha-da-bia')).ok, true);
+  assert.equal((await trocarSenha('bia@casa.org', provisoria, 'senha-da-bia', false, true)).ok, true);
 }
 
 test('primeiro acesso cria administrador uma vez só e abre a sessão', async () => {
@@ -100,7 +100,7 @@ test('senha provisória não abre sessão até ser trocada', async () => {
   assert.equal(contaAtual(), null);
   assert.equal((await trocarSenha('bia@casa.org', provisoria, provisoria)).ok, false);
   assert.equal((await trocarSenha('bia@casa.org', 'errada-123', 'senha-da-bia')).ok, false);
-  assert.equal((await trocarSenha('bia@casa.org', provisoria, 'senha-da-bia')).ok, true);
+  assert.equal((await trocarSenha('bia@casa.org', provisoria, 'senha-da-bia', false, true)).ok, true);
   assert.equal(contaAtual().nome, 'Bia');
   sair();
   assert.equal((await entrar('bia@casa.org', provisoria)).ok, false);
@@ -225,7 +225,7 @@ test('voluntário não desfaz; financeiro não desfaz estoque', async () => {
   const doacao = adm.registrar(ENTRADAS.doacao_item).movimento;
   await criarConta({ nome: 'Bia', email: 'bia@casa.org', perfil: 'voluntario' }).then(async ({ senhaProvisoria }) => {
     sair();
-    await trocarSenha('bia@casa.org', senhaProvisoria, 'senha-da-bia');
+    await trocarSenha('bia@casa.org', senhaProvisoria, 'senha-da-bia', false, true);
   });
   assert.match(criarStore({ permitir: pode }).estornar(doacao.codigo).erro, NEGADO);
   const codigoBia = contaAtual().codigo;
@@ -388,4 +388,57 @@ test('a versão nova do app só assume quando o app é reaberto', () => {
   const sw = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'sw.js'), 'utf8');
   // Com skipWaiting, o app.js novo chegava a uma página antiga depois do login, e o painel ficava em branco.
   assert.ok(!sw.includes('self.skipWaiting('));
+});
+
+// ---------- termos de uso ----------
+
+const mexerNaConta = (email, mudar) => {
+  const config = lerConfig();
+  const lista = config.contas.map((c) => (c.email === email ? mudar({ ...c }) : c));
+  salvarConfig({ contas: lista });
+};
+
+test('administrador só é criado com o aceite dos termos, que fica guardado com data', async () => {
+  const sem = await criarAdministrador({ ...ADMIN, aceitouTermos: false });
+  assert.equal(sem.ok, false);
+  assert.match(sem.erro, /Termos de uso/);
+  assert.equal(temContas(), false);
+  assert.equal((await criarAdministrador({ ...ADMIN, aceitouTermos: 'sim' })).ok, false); // só true vale
+  assert.equal((await criarAdministrador(ADMIN)).ok, true);
+  assert.ok(contaAtual().termosAceitosEm);
+  assert.ok(lerAuditoria().some((l) => l.acao === 'Aceitou os termos'));
+});
+
+test('no primeiro acesso, a senha provisória só vira senha nova com o aceite', async () => {
+  const provisoria = await comPessoa('voluntario');
+  const sem = await trocarSenha('bia@casa.org', provisoria, 'senha-da-bia');
+  assert.equal(sem.ok, false);
+  assert.match(sem.erro, /Termos de uso/);
+  assert.equal(contaAtual(), null);
+  assert.equal((await trocarSenha('bia@casa.org', provisoria, 'senha-da-bia', false, true)).ok, true);
+  assert.equal(contaAtual().email, 'bia@casa.org');
+  assert.ok(contaAtual().termosAceitosEm);
+});
+
+test('conta sem o aceite (de antes dos termos) sai da sessão e aceita na próxima entrada', async () => {
+  await criarAdministrador(ADMIN);
+  mexerNaConta('ana@casa.org', (c) => { delete c.termos; return c; });
+  assert.equal(contaAtual(), null); // a sessão aberta deixa de valer
+  const r = await entrar(ADMIN.email, ADMIN.senha);
+  assert.equal(r.aceitarTermos, true);
+  assert.equal(contaAtual(), null);
+  assert.equal((await aceitarTermos(ADMIN.email, ADMIN.senha, false, false)).ok, false);
+  assert.equal((await aceitarTermos(ADMIN.email, 'senha-errada-1', false, true)).ok, false);
+  assert.equal((await aceitarTermos(ADMIN.email, ADMIN.senha, false, true)).ok, true);
+  assert.equal(contaAtual().perfil, 'administrador');
+});
+
+test('termos com versão nova pedem um novo aceite', async () => {
+  await criarAdministrador(ADMIN);
+  mexerNaConta('ana@casa.org', (c) => ({ ...c, termos: { versao: '2000-01-01', em: '2000-01-01T00:00:00.000Z' } }));
+  assert.equal(contaAtual(), null);
+  assert.equal((await entrar(ADMIN.email, ADMIN.senha)).aceitarTermos, true);
+  await aceitarTermos(ADMIN.email, ADMIN.senha, false, true);
+  assert.equal(listarContas()[0].termosAceitosEm !== null, true);
+  assert.equal(TERMOS_VERSAO, lerConfig().contas[0].termos.versao);
 });

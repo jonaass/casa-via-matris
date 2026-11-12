@@ -37,6 +37,8 @@ palavras simples: quem lê nem sempre é da área de tecnologia.
    (Os avisos de "ilegíveis" e "QuotaExceededError" no segundo comando são falhas simuladas pelos testes.)
 4. Registre no `README.md`, em "Corrigidos na X.Y.Z" ou em "O que já funciona".
 5. O `sw.js` não usa `skipWaiting` de propósito: a versão nova só assume quando o app é fechado e aberto.
+6. Mudou o texto de `termos.html`? Mude a data em `TERMOS_VERSAO` (`js/acesso.js`) e a data "Versão de"
+   no topo dos termos: todo mundo precisa aceitar de novo.
 
 ## Arquitetura (não quebrar)
 
@@ -48,7 +50,8 @@ A tela nunca grava dados direto; pede ao store e redesenha com o que voltou.
 
 - Texto vindo de pessoa entra na página só por `textContent` ou pela função `el()` do `app.js`.
   Nunca `innerHTML` com dado do usuário (XSS).
-- A CSP só aceita scripts do próprio site: nada de biblioteca de CDN nem `<script>` inline.
+- A CSP só aceita arquivos do próprio site: nada de biblioteca de CDN, fonte do Google nem `<script>` inline.
+  O app não usa cookies nem envia dados a terceiros, e os termos prometem isso: não quebre essa promessa.
 - Permissões: toda página nova entra em `PAGINAS` no `acesso.js`, e toda ação nova é conferida
   com `pode()` também no `store.js`, não só escondida na tela. A tabela de acessos fica no README.
   Financeiro não vê estoque; Almoxarifado e Voluntário não veem dinheiro; Administrador vê tudo.
