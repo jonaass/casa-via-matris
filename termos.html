@@ -34,7 +34,7 @@
       <h2 id="t-resumo">O essencial, em 6 pontos</h2>
       <ol>
         <li>É um projeto de estudantes, gratuito e <strong>em desenvolvimento</strong>. Pode ter falhas.</li>
-        <li>Os dados ficam <strong>só neste aparelho</strong>. A equipe do projeto não recebe nem vê nada do que você registra.</li>
+        <li>Os dados ficam <strong>só neste aparelho</strong>. O sistema não envia o que você registra para a equipe do projeto nem para ninguém.</li>
         <li><strong>Não registre dados de pessoas acolhidas</strong>: nomes, documentos, saúde ou história de vida.</li>
         <li>Faça o <strong>backup toda semana</strong>. Se o aparelho for perdido ou limpo, só sobra o que foi baixado.</li>
         <li>Sua senha é <strong>pessoal</strong>. O que for lançado com a sua conta fica registrado no seu nome.</li>
@@ -70,7 +70,8 @@
       <ul>
         <li>Tudo o que é registrado (itens, doações, valores, contas e atividades) fica guardado <strong>no navegador deste
             aparelho</strong>. Não existe, por enquanto, um servidor com os dados da casa.</li>
-        <li>A equipe do projeto <strong>não recebe, não vê e não guarda cópia</strong> desses dados.</li>
+        <li>O sistema <strong>não envia</strong> esses dados para a equipe do projeto nem para ninguém, e a equipe não
+          guarda cópia deles.</li>
         <li>O site é entregue pelo GitHub Pages, que envia apenas os arquivos do programa. Como qualquer site, o servidor
           do GitHub registra dados técnicos da conexão, como o endereço IP, conforme a política de privacidade do GitHub.</li>
         <li>As planilhas de backup são baixadas para o aparelho de quem as baixou. A partir daí, quem as guarda responde
@@ -119,21 +120,29 @@
           das doações.</li>
       </ul>
       <p>Quem decide quais dados entram e para que servem é a <strong>Casa Via Matris</strong>, por meio do
-        administrador do sistema. A equipe do projeto não tem acesso aos dados registrados.</p>
+        administrador do sistema. O sistema não envia os dados registrados para a equipe do projeto.</p>
       <p>Toda pessoa cujos dados estejam no sistema pode pedir para saber quais dados existem, corrigi-los ou apagá-los
-        (art. 18 da LGPD). O pedido é feito à administração da Casa Via Matris. O administrador pode corrigir ou desfazer
-        lançamentos, desativar contas e, se for o caso, apagar todos os dados do aparelho em "Começar do zero".</p>
+        (art. 18 da LGPD). O pedido é feito à administração da Casa Via Matris. Pelo sistema, o administrador pode:</p>
+      <ul>
+        <li>desfazer um lançamento e registrá-lo de novo com o nome corrigido, ou sem nome ("Doador anônimo");</li>
+        <li>desativar a conta de quem saiu da equipe;</li>
+        <li>usar "Começar do zero", que apaga o estoque, as doações e o dinheiro. As contas e o registro de atividades
+          continuam.</li>
+      </ul>
+      <p>Quando um lançamento não puder mais ser desfeito, o administrador baixa as planilhas, apaga o nome nelas, usa
+        "Começar do zero" e restaura as planilhas corrigidas. Para apagar <strong>tudo</strong>, inclusive contas e
+        registro de atividades, é preciso limpar os dados deste site nas configurações do navegador.</p>
     </section>
 
     <section aria-labelledby="t-8">
       <h2 id="t-8">8. Cookies e armazenamento no aparelho</h2>
       <p>O sistema <strong>não usa cookies</strong>, nem ferramentas de análise, propaganda ou rastreamento, e não envia
         dados para outras empresas. As fontes de letra também são entregues pelo próprio site.</p>
-      <p>Ele usa o <strong>armazenamento do navegador</strong> (localStorage e cache), que é indispensável para funcionar:
+      <p>Ele usa o <strong>armazenamento do navegador</strong> (localStorage, sessionStorage e cache), que é indispensável para funcionar:
         é ali que ficam as contas, a sessão aberta, os lançamentos e os arquivos que permitem abrir o sistema sem
         internet. Por ser necessário para o próprio serviço pedido por quem usa, esse armazenamento não depende de um
-        aceite separado. Para apagar tudo, use "Começar do zero" ou limpe os dados deste site nas configurações do
-        navegador. Atenção: sem backup, essa limpeza não tem volta.</p>
+        aceite separado. Para apagar tudo, limpe os dados deste site nas configurações do navegador. Atenção: sem
+        backup, essa limpeza não tem volta.</p>
     </section>
 
     <section aria-labelledby="t-9">
@@ -142,6 +151,9 @@
         vê só a sua parte. Mesmo assim, enquanto não houver um servidor, o login <strong>organiza quem usa o
           aparelho, mas não é um cofre</strong>: quem tiver o aparelho nas mãos e conhecimento técnico consegue ler os
         dados guardados no navegador. É por isso que o item 6 é tão importante.</p>
+      <p>Enquanto estiver no endereço de teste (jonaass.github.io), o sistema divide o armazenamento do navegador com
+        outros sites desse mesmo endereço. Uma falha ou alteração num deles poderia ler esses dados. Para o uso com dados
+        reais da casa, o recomendado é publicar o sistema num endereço próprio.</p>
     </section>
 
     <section aria-labelledby="t-10">

@@ -121,8 +121,9 @@
     return null;
   }
 
-  function registrarAuditoria(acao, detalhe = '') {
-    const quem = contaAtual()?.nome ?? '';
+  // "quem" explícito para ações feitas antes de a sessão valer (por exemplo, sem o aceite dos termos).
+  function registrarAuditoria(acao, detalhe = '', quemFez = null) {
+    const quem = quemFez ?? contaAtual()?.nome ?? '';
     const lista = [{ quando: new Date().toISOString(), quem, acao, detalhe }, ...(lerConfig().auditoria ?? [])];
     salvarConfig({ auditoria: lista.slice(0, LIMITE_AUDITORIA) }); // falhar aqui não pode impedir o uso
   }
@@ -281,8 +282,8 @@
     const salvo = limparTentativas(r.conta, { senha: await novaSenhaGuardada(nova), provisoria: false, ...(aceitaAgora ? aceiteDeAgora() : {}) });
     if (!salvo.ok) return salvo;
     if (!contaAtual()) abrirSessao(r.conta, manter);
-    registrarAuditoria('Trocou a senha');
-    if (aceitaAgora) registrarAuditoria('Aceitou os termos', `versão de ${TERMOS_VERSAO}`);
+    registrarAuditoria('Trocou a senha', '', r.conta.nome);
+    if (aceitaAgora) registrarAuditoria('Aceitou os termos', `versão de ${TERMOS_VERSAO}`, r.conta.nome);
     return { ok: true };
   }
 
@@ -318,7 +319,7 @@
     const salvo = gravar(lista, { recuperacao: await novaSenhaGuardada(codigoRecuperacao) });
     if (!salvo.ok) return salvo;
     abrirSessao(conta, false);
-    registrarAuditoria('Recuperou a senha com o código');
+    registrarAuditoria('Recuperou a senha com o código', '', conta.nome);
     return { ok: true, codigoRecuperacao };
   }
 

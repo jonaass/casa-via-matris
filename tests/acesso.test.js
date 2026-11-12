@@ -442,3 +442,25 @@ test('termos com versão nova pedem um novo aceite', async () => {
   assert.equal(listarContas()[0].termosAceitosEm !== null, true);
   assert.equal(TERMOS_VERSAO, lerConfig().contas[0].termos.versao);
 });
+
+test('nenhum caminho abre a sessão sem o aceite, e as ações ficam com o nome de quem fez', async () => {
+  const { codigoRecuperacao } = await criarAdministrador(ADMIN);
+  await criarConta({ nome: 'Bia', email: 'bia@casa.org', perfil: 'financeiro' }).then(async ({ senhaProvisoria }) => {
+    // Conta provisória não aceita termos sem antes criar a senha.
+    assert.equal((await aceitarTermos('bia@casa.org', senhaProvisoria, false, true)).ok, false);
+  });
+  mexerNaConta('ana@casa.org', (c) => { delete c.termos; return c; });
+
+  // (a) recuperar a senha com o código não abre o painel sem o aceite
+  assert.equal((await recuperarSenha(ADMIN.email, codigoRecuperacao, 'senha-nova-1')).ok, true);
+  assert.equal(contaAtual(), null);
+  // (b) trocar a senha de conta comum sem aceitar também não
+  assert.equal((await trocarSenha(ADMIN.email, 'senha-nova-1', 'senha-nova-2')).ok, true);
+  assert.equal(contaAtual(), null);
+
+  await aceitarTermos(ADMIN.email, 'senha-nova-2', false, true);
+  const acoes = lerAuditoria();
+  for (const acao of ['Recuperou a senha com o código', 'Trocou a senha']) {
+    assert.equal(acoes.find((l) => l.acao === acao).quem, 'Ana', acao);
+  }
+});
