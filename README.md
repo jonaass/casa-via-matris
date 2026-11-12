@@ -103,6 +103,8 @@ manifest.json       nome e ícones do app instalado
 tests/              testes automáticos
 ferramentas/        gerar ícones e planilhas de teste
 MIGUEL.md           contrato detalhado de dados.js, backup.js e utilitarios.js
+CLAUDE.md           regras do projeto para o Claude (commits, VERSAO, segurança)
+.claude/agents/     agentes do projeto: publicação, testes, acessos, design, back-end e documentação
 ```
 
 A separação em camadas é a decisão mais importante do projeto: tela (`app.js`) → regras
