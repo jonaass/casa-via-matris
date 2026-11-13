@@ -18,7 +18,8 @@
   <link rel="manifest" href="manifest.json">
   <link rel="icon" href="icones/icone-192.png">
   <link rel="apple-touch-icon" href="icones/icone-apple-180.png">
-  <meta name="theme-color" content="#0c1219">
+  <meta name="theme-color" content="#0c1219" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#f7f4ee" media="(prefers-color-scheme: light)">
 </head>
 
 <body>
@@ -94,7 +95,7 @@
 
         <div class="acesso-guardar" id="acesso-guardar" hidden>
           <p class="acesso-codigo" id="acesso-codigo"></p>
-          <button type="button" class="botao" id="a-guardei">Já guardei o código</button>
+          <button type="button" class="botao" id="a-guardei" aria-describedby="acesso-apoio acesso-codigo">Já guardei o código</button>
         </div>
         <button type="button" class="link acesso-voltar" id="a-voltar" hidden></button>
         <p class="acesso-nota">Os dados ficam só neste aparelho. Não registre nomes de pessoas acolhidas nem documentos.
@@ -152,27 +153,29 @@
         <div class="opcoes-painel">
         <p><strong id="conta-nome"></strong><br><span id="conta-perfil"></span></p>
         <button type="button" class="botao-fantasma" id="conta-senha">Trocar senha</button>
-        <button type="button" class="botao-fantasma" id="conta-sair">Sair</button>
         <a class="botao-fantasma" href="termos.html" target="_blank" rel="noopener">Termos e privacidade</a>
         <div class="area-admin" id="area-admin" hidden>
-        <button type="button" class="botao-fantasma" id="conta-codigo">Novo código de recuperação</button>
-        <p id="backup-quando"></p>
-        <button type="button" class="botao-fantasma" id="backup-baixar">Baixar planilhas</button>
-        <button type="button" class="botao-fantasma" id="backup-restaurar">Restaurar de planilhas</button>
-        <input type="file" id="backup-arquivo" accept=".csv,text/csv" multiple hidden>
-        <p>Os dados ficam só neste aparelho. Não coloque nomes de pessoas acolhidas nem documentos.</p>
-        <button type="button" class="botao-fantasma" id="comecar-zero">Começar do zero</button>
-        <button type="button" class="botao-fantasma" id="restaurar">Mostrar dados de exemplo</button>
-        <!-- Confirmação dentro da página: diálogos confirm() são bloqueados em alguns lugares onde o site fica hospedado. -->
-        <div class="confirmar" id="confirmar-restaurar" hidden>
-          <p id="confirmar-texto"></p>
-          <div class="confirmar-acoes">
-            <button type="button" class="botao-fantasma" id="restaurar-sim">Apagar</button>
-            <button type="button" class="botao-fantasma" id="restaurar-nao">Cancelar</button>
+          <button type="button" class="botao-fantasma" id="conta-codigo">Novo código de recuperação</button>
+          <h2 class="opcoes-titulo">Cópia dos dados</h2>
+          <p id="backup-quando"></p>
+          <button type="button" class="botao" id="backup-baixar">Baixar planilhas</button>
+          <button type="button" class="botao-fantasma" id="backup-restaurar">Restaurar de planilhas</button>
+          <input type="file" id="backup-arquivo" accept=".csv,text/csv" multiple hidden>
+          <p>Os dados ficam só neste aparelho. Não coloque nomes de pessoas acolhidas nem documentos.</p>
+          <h2 class="opcoes-titulo perigo-titulo">Apagar dados</h2>
+          <button type="button" class="botao-fantasma botao-perigoso" id="comecar-zero">Começar do zero</button>
+          <button type="button" class="botao-fantasma botao-perigoso" id="restaurar">Trocar pelos dados de exemplo</button>
+          <!-- Confirmação dentro da página: diálogos confirm() são bloqueados em alguns lugares onde o site fica hospedado. -->
+          <div class="confirmar" id="confirmar-restaurar" hidden>
+            <p id="confirmar-texto"></p>
+            <div class="confirmar-acoes">
+              <button type="button" class="botao-fantasma perigo" id="restaurar-sim">Sim, apagar tudo</button>
+              <button type="button" class="botao-fantasma" id="restaurar-nao">Cancelar</button>
+            </div>
           </div>
         </div>
-        </div>
-        <p>Versão <span id="versao"></span></p>
+        <button type="button" class="botao-fantasma" id="conta-sair">Sair</button>
+        <p class="opcoes-versao">Versão <span id="versao"></span></p>
         </div>
       </details>
     </aside>
@@ -186,8 +189,8 @@
         <button type="button" class="botao-fantasma" id="faixa-comecar-zero">Começar do zero</button>
       </div>
       <div class="faixa" id="faixa-samsung" hidden>
-        <p>Para instalar no celular, use o Chrome: neste navegador o Android pode bloquear a instalação. O que foi
-          lançado aqui não passa sozinho para lá; antes de trocar, baixe as planilhas.</p>
+        <p>Para instalar o app, abra no Chrome. Antes de trocar de navegador, baixe as planilhas: o que foi lançado aqui
+          não passa sozinho para lá.</p>
         <a class="botao-fantasma" id="abrir-chrome" href="https://jonaass.github.io/casa-via-matris/">Abrir no
           Chrome</a>
       </div>
@@ -218,7 +221,7 @@
             <span class="indicador-nota" id="kpi-minimo-nota"></span>
           </a>
           <a class="indicador" id="kpi-validade-bloco" href="#/estoque">
-            <span class="indicador-titulo">Vencem em até 15 dias</span>
+            <span class="indicador-titulo">Vencidos ou vencem em 15 dias</span>
             <span class="indicador-valor" id="kpi-validade"></span>
             <span class="indicador-nota" id="kpi-validade-nota"></span>
           </a>
@@ -264,6 +267,15 @@
             </div>
           </details>
         </section>
+
+        <section class="painel cartao-backup" id="cartao-backup" aria-labelledby="titulo-backup" hidden>
+          <div>
+            <h2 id="titulo-backup">Cópia dos dados</h2>
+            <p class="painel-ajuda"><span id="cartao-backup-quando"></span> Os dados só existem neste aparelho: baixe as
+              3 planilhas toda semana e guarde fora dele.</p>
+          </div>
+          <button type="button" class="botao" id="cartao-backup-baixar">Baixar planilhas</button>
+        </section>
       </section>
 
       <section class="pagina" data-pagina="estoque" aria-labelledby="t-estoque" hidden>
@@ -275,8 +287,8 @@
         <section id="despensa" class="painel" aria-label="Itens da despensa e do almoxarifado">
           <div class="filtros">
             <label class="campo-busca">
-              <span class="visualmente-oculto">Buscar item</span>
-              <input type="search" id="busca" placeholder="Buscar item" autocomplete="off">
+              <span class="campo-busca-rotulo">Buscar item</span>
+              <input type="search" id="busca" placeholder="Ex.: arroz, sabonete" autocomplete="off">
             </label>
             <fieldset class="chips">
               <legend class="visualmente-oculto">Filtrar por categoria</legend>
@@ -368,7 +380,7 @@
             <div class="campo">
               <label for="f-pessoa" id="r-pessoa">Quem doou?</label>
               <input id="f-pessoa" name="pessoa" maxlength="80" autocomplete="off" aria-describedby="f-pessoa-dica">
-              <p class="dica" id="f-pessoa-dica" hidden>Em branco, fica registrado como “Doador anônimo”.</p>
+              <p class="dica" id="f-pessoa-dica" hidden></p>
             </div>
 
             <div class="campo">
@@ -438,7 +450,8 @@
 
         <section class="painel" aria-labelledby="titulo-perfis">
           <h2 id="titulo-perfis">O que cada perfil vê</h2>
-          <div class="tabela-rolagem" tabindex="0" role="region" aria-labelledby="titulo-perfis">
+          <ul class="matriz-cartoes" id="matriz-cartoes"></ul>
+          <div class="tabela-rolagem matriz-tabela" tabindex="0" role="region" aria-labelledby="titulo-perfis">
             <table class="tabela matriz">
               <thead id="matriz-cabeca"></thead>
               <tbody id="matriz-corpo"></tbody>
@@ -457,7 +470,7 @@
           <div class="senha-gerada" id="senha-gerada" role="status" hidden>
             <p id="senha-gerada-texto"></p>
             <p class="acesso-codigo" id="senha-gerada-valor"></p>
-            <button type="button" class="botao-fantasma" id="senha-gerada-fechar">Já anotei</button>
+            <button type="button" class="botao-fantasma" id="senha-gerada-fechar" aria-describedby="senha-gerada-texto senha-gerada-valor">Já anotei</button>
           </div>
           <h3 class="subtitulo">Liberar acesso para uma pessoa</h3>
           <form id="form-conta" class="form-conta" novalidate>

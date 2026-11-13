@@ -24,9 +24,18 @@
       campos: ['email', 'senha', 'opcoes'],
       botao: 'Entrar',
     },
+    // Dois caminhos: a equipe não tem código e só precisa saber a quem pedir; o administrador usa o código.
     esqueci: {
       titulo: 'Recuperar o acesso',
-      apoio: 'Peça uma senha provisória ao administrador. Se você é o administrador, use o código de recuperação.',
+      apoio: 'Se você é da equipe, peça ao administrador uma senha provisória (ele gera na página Acessos, em "Gerar senha"). ' +
+        'Se você é o administrador, use o código de recuperação que anotou ao criar a conta.',
+      campos: [],
+      botao: 'Sou o administrador e tenho o código',
+      voltar: 'Voltar para a entrada',
+    },
+    recuperar: {
+      titulo: 'Recuperar com o código',
+      apoio: 'Informe o seu e-mail, o código de recuperação e uma senha nova. Depois, você recebe um código novo para guardar.',
       campos: ['email', 'codigo', 'nova', 'confirmar'],
       botao: 'Trocar senha',
       voltar: 'Voltar para a entrada',
@@ -95,7 +104,7 @@
     });
     form.querySelectorAll('.olho').forEach((b) => { b.setAttribute('aria-pressed', 'false'); b.setAttribute('aria-label', 'Mostrar senha'); });
     mostrarErro('');
-    form.querySelector('input:not(:disabled):not([type=checkbox])')?.focus();
+    (form.querySelector('input:not(:disabled):not([type=checkbox])') ?? $('a-enviar')).focus();
   }
 
   // Mostra o código de recuperação uma vez só; ele não fica guardado de forma legível.
@@ -166,7 +175,8 @@
       provisoria = null;
       return abrirApp();
     }
-    if (modo === 'esqueci') {
+    if (modo === 'esqueci') return irPara('recuperar');
+    if (modo === 'recuperar') {
       const r = await recuperarSenha(v.email, v.codigo, v.nova);
       if (!r.ok) return mostrarErro(r.erro);
       // Conta de antes dos termos: depois de anotar o código, ainda precisa aceitar.
@@ -252,6 +262,21 @@
 
   // ---------- início ----------
 
+  // Dentro de outro site (iframe), alguém poderia induzir cliques em "Começar do zero" ou "Desativar".
+  // A CSP por <meta> não consegue barrar isso, e o GitHub Pages não manda o cabeçalho que barraria.
+  if (window.top !== window.self) {
+    document.body.textContent = 'Abra o sistema da Casa Via Matris pelo endereço oficial, fora de outros sites.';
+    return;
+  }
+
+  // Na tela de entrada, "Pular para o conteúdo" leva ao formulário (o painel ainda está escondido).
+  document.querySelector('.pular').addEventListener('click', (e) => {
+    if (!document.querySelector('.app').hidden) return;
+    e.preventDefault();
+    $('acesso-titulo').tabIndex = -1;
+    $('acesso-titulo').focus();
+  });
+
   // Fica aqui, e não no app.js, para a tela de acesso também abrir sem internet antes do primeiro login.
   // Falha em silêncio onde service worker não é permitido (arquivo local).
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).catch(() => { });
@@ -260,7 +285,7 @@
     abrirApp();
     return;
   }
-  desenharRecados();
+  try { desenharRecados(); } catch (e) { console.warn(e); } // recados nunca podem impedir a entrada
   $('tela-acesso').hidden = false;
   let guarda = false;
   try { guarda = Boolean(globalThis.localStorage); } catch (e) { /* cookies bloqueados */ }
