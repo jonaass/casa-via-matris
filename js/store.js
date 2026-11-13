@@ -383,6 +383,10 @@
     }
 
     const ehExemplo = (m) => m.codigo.startsWith(PREFIXO_EXEMPLO);
+    // Com os dados vindo do banco (servidor.js), a cópia do aparelho é só leitura: apagar ou trocar
+    // por exemplos seria desfeito no próximo login, sem aviso. Só o administrador, e só sem servidor.
+    const podeTrocarDados = () => permitir('administrar') &&
+      !(typeof globalThis.modoServidor === 'function' && globalThis.modoServidor());
 
     return {
       itens: itensValidos,
@@ -392,9 +396,9 @@
       estornar,
       resumo,
       fluxoMensal,
-      restaurarExemplo: () => (permitir('administrar') ? gravarColecoes(dadosDeExemplo()) : NEGADO),
+      restaurarExemplo: () => (podeTrocarDados() ? gravarColecoes(dadosDeExemplo()) : NEGADO),
       apagarTudo: () => {
-        if (!permitir('administrar')) return NEGADO;
+        if (!podeTrocarDados()) return NEGADO;
         const erro = gravarColecoes({ itens: [], doacoes: [], dinheiro: [] });
         // O backup antigo não tem o que for lançado daqui em diante: o aviso precisa voltar a contar.
         if (!erro) salvarConfig({ ultimoBackup: {} });

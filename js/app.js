@@ -782,13 +782,22 @@
         : `Último backup: há ${dias} dia${dias === 1 ? '' : 's'}.`;
     $('backup-quando').textContent = quando;
     $('cartao-backup-quando').textContent = quando;
-    $('cartao-backup').hidden = !pode('administrar');
+    // Com os dados vindo do banco (servidor.js), a cópia do aparelho é só leitura e a principal fica no
+    // servidor: nada de restaurar, apagar ou trocar por exemplos por aqui.
+    const servidor = modoServidor();
+    $('cartao-backup').hidden = !pode('administrar') || servidor;
+    $('backup-restaurar').hidden = servidor;
+    $('area-apagar-dados').hidden = servidor;
+    $('backup-onde').textContent = servidor
+      ? 'Os dados vêm do banco da casa; as planilhas são uma cópia do que este perfil vê. Não coloque nomes de pessoas acolhidas nem documentos.'
+      : 'Os dados ficam só neste aparelho. Não coloque nomes de pessoas acolhidas nem documentos.';
 
     const temExemplos = store.temExemplos();
-    $('faixa-exemplo').hidden = !temExemplos || !pode('administrar');
+    $('faixa-exemplo').hidden = !temExemplos || !pode('administrar') || servidor;
     // Exemplos não precisam de backup; dados reais sim, mesmo misturados a eles, e são a única cópia.
     const atrasado = !store.soExemplos() && store.movimentos().length > 0 && (dias === null || dias > DIAS_ENTRE_BACKUPS);
-    $('faixa-backup').hidden = !atrasado || !pode('administrar');
+    // Com os dados vindo do banco, a cópia principal fica no servidor: o aviso não se aplica.
+    $('faixa-backup').hidden = !atrasado || !pode('administrar') || modoServidor();
     $('faixa-backup-texto').textContent = `${quando} Os dados só existem neste aparelho: baixe as planilhas e guarde fora dele.`;
   }
 
@@ -868,9 +877,16 @@
   function conferirSessao() {
     const atual = contaAtual();
     // Outra aba pode ter trocado o perfil: recarrega para o menu e as páginas seguirem o perfil novo.
-    if (atual?.codigo === conta?.codigo && atual?.perfil === conta?.perfil) return false;
+    // E a cópia do banco precisa ser desta pessoa (outra aba pode ter entrado com outra conta).
+    if (atual?.codigo === conta?.codigo && atual?.perfil === conta?.perfil && !copiaDeOutraPessoa(atual.email)) return false;
     location.reload();
     return true;
+  }
+
+  // Com os dados vindo do banco, o perfil que vale é o do servidor (servidor.js), não o do aparelho.
+  function perfilEfetivo() {
+    const doServidor = modoServidor() ? lerConfig().servidor.perfil : null;
+    return Object.prototype.hasOwnProperty.call(PERFIS, doServidor) ? doServidor : conta.perfil;
   }
 
   // Esconder melhora a tela, mas quem barra de verdade são as regras no store.js e no acesso.js.
@@ -880,7 +896,7 @@
     const admin = pode('administrar');
     $('conta-resumo').textContent = conta.nome.split(' ')[0];
     $('conta-nome').textContent = conta.nome;
-    $('conta-perfil').textContent = PERFIS[conta.perfil].rotulo;
+    $('conta-perfil').textContent = PERFIS[perfilEfetivo()].rotulo;
     $('area-admin').hidden = !admin;
     $('kpi-saldo-bloco').hidden = !verDinheiro;
     $('kpi-minimo-bloco').hidden = !verEstoque;
@@ -890,11 +906,14 @@
     // O saldo leva ao histórico; quem não tem histórico vê o número, mas sem link.
     if (!pode('historico')) $('kpi-saldo-bloco').removeAttribute('href');
     document.querySelectorAll('.lateral nav a[data-pagina]').forEach((a) => { a.hidden = !podeVerPagina(a.dataset.pagina); });
+    document.querySelectorAll('.atalho-registrar').forEach((a) => { a.hidden = !podeVerPagina('registrar'); });
     $('filtro-area-rotulo').hidden = !(verEstoque && verDinheiro);
 
     const opcoes = [...form.elements.tipo];
     opcoes.forEach((r) => { r.disabled = !pode(r.value); r.closest('label').hidden = r.disabled; });
-    opcoes.find((r) => !r.disabled).checked = true;
+    // Com os dados vindo do banco (servidor.js), nenhuma opção fica liberada: não há o que marcar.
+    const primeira = opcoes.find((r) => !r.disabled);
+    if (primeira) primeira.checked = true;
     form.querySelector('.tipos').dataset.opcoes = String(opcoes.filter((r) => !r.disabled).length);
   }
 
@@ -908,8 +927,11 @@
     if (conferirSessao()) return;
     const { pagina, pedida } = paginaDoEndereco(location.hash);
     if (pedida) {
-      $('sem-permissao-texto').textContent = `A página ${PAGINAS[pedida].rotulo} não faz parte do perfil ${PERFIS[conta.perfil].rotulo}. ` +
-        'Se você precisa dela, peça ao administrador.';
+      const somenteLeitura = pedida === 'registrar' && modoServidor();
+      $('t-sem-permissao').textContent = somenteLeitura ? 'Ainda não disponível' : 'Sem permissão';
+      $('sem-permissao-texto').textContent = somenteLeitura
+        ? 'Os dados agora vêm do banco da casa, e registrar por aqui ainda não está disponível. Essa parte chega na próxima versão.'
+        : `A página ${PAGINAS[pedida].rotulo} não faz parte do perfil ${PERFIS[perfilEfetivo()].rotulo}. Se você precisa dela, peça ao administrador.`;
     }
     document.querySelectorAll('.pagina').forEach((secao) => { secao.hidden = secao.dataset.pagina !== pagina; });
     document.querySelectorAll('.lateral nav a[data-pagina]').forEach((a) => {

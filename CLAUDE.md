@@ -31,8 +31,9 @@ palavras simples: quem lê nem sempre é da área de tecnologia.
 2. Arquivo novo que o app carrega entra na lista `ARQUIVOS` do `sw.js`.
 3. Rode os testes e só siga com todos passando:
    ```bash
-   node --test tests/store.test.js tests/acesso.test.js
+   node --test tests/store.test.js tests/acesso.test.js tests/servidor.test.js
    node tests/testar-miguel.js
+   python -m pytest backend/tests        # quando mexer no backend/ (precisa do pip install -r backend/requirements.txt)
    ```
    (Os avisos de "ilegíveis" e "QuotaExceededError" no segundo comando são falhas simuladas pelos testes.)
 4. Registre no `README.md`, em "Corrigidos na X.Y.Z" ou em "O que já funciona".
