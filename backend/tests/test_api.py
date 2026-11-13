@@ -365,3 +365,9 @@ def test_erro_interno_responde_no_formato_de_erro(con, monkeypatch):
     monkeypatch.setattr(seguranca, "usuario_da_sessao", quebrar)
     r = TestClient(app, raise_server_exceptions=False).get("/api/eu", cookies={"vm_sessao": "x"})
     assert r.status_code == 500 and "erro" in r.json()
+
+
+def test_manter_conectado_dura_30_dias(cliente):
+    r = cliente.post("/api/entrar", json={"email": "administrador@teste.com", "senha": SENHA, "manter": True}, headers=ORIGEM)
+    assert f"Max-Age={seguranca.SESSAO_LONGA_S}" in r.headers["set-cookie"]
+    assert f"Max-Age={seguranca.SESSAO_S}" in entrar(cliente, "financeiro").headers["set-cookie"]

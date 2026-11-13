@@ -28,7 +28,8 @@ SENHA_MINIMA = 8
 SENHA_MAXIMA = 128
 MAX_ERROS = 5
 BLOQUEIO_S = 15 * 60
-SESSAO_S = 8 * 60 * 60
+SESSAO_S = 8 * 60 * 60            # sessão comum: 8 horas, como a sessão curta do aparelho
+SESSAO_LONGA_S = 30 * 24 * 60 * 60  # "Manter conectado": 30 dias, como no acesso.js
 
 ERRO_LOGIN = "E-mail ou senha incorretos."
 EMAIL_VALIDO = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")  # a mesma regra do acesso.js
@@ -182,14 +183,14 @@ def _hash_do_token(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
 
 
-def abrir_sessao(con: sqlite3.Connection, usuario_codigo: str) -> str:
+def abrir_sessao(con: sqlite3.Connection, usuario_codigo: str, duracao_s: int = SESSAO_S) -> str:
     """Cria a sessão e devolve o token (vai só no cookie; o banco guarda o hash)."""
     token = secrets.token_urlsafe(32)
     agora = time.time()
     with con:
         con.execute("DELETE FROM sessoes WHERE expira_em < ?", (agora,))  # faxina das vencidas
         con.execute("INSERT INTO sessoes (token_hash, usuario_codigo, criada_em, expira_em) VALUES (?, ?, ?, ?)",
-                    (_hash_do_token(token), usuario_codigo, agora, agora + SESSAO_S))
+                    (_hash_do_token(token), usuario_codigo, agora, agora + duracao_s))
     return token
 
 

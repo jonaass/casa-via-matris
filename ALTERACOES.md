@@ -1,4 +1,7 @@
-# Alterações da versão 1.3.0: o site puxa os dados do banco
+# Alterações do back-end: o site puxa os dados do banco
+
+> Escrito pelo Anthony na branch `backend-banco`. Ao juntar com a 1.3 do Jonas, a versão virou **1.4.0**,
+> e a revisão corrigiu vários pontos (veja "Corrigidos na 1.4.0" no README).
 
 Resumo do que mudou na branch `backend-banco`. Ela ainda **não está na `main`**, então o site no ar
 continua igual até o Jonas revisar e juntar.

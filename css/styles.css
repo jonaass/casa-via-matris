@@ -412,6 +412,7 @@ a.indicador[href]:hover .indicador-titulo {
 }
 
 .indicador-valor {
+  white-space: nowrap; /* o "−" do saldo negativo não pode ficar sozinho numa linha */
   font-family: var(--fonte-titulo);
   font-weight: 300;
   font-size: clamp(2rem, 1.4rem + 1.8vw, 3rem);

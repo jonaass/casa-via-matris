@@ -86,7 +86,11 @@
     modo = novo;
     const m = MODOS[novo];
     $('acesso-titulo').textContent = m.titulo;
-    $('acesso-apoio').textContent = m.apoio;
+    // Com o servidor da casa, o código só troca a senha do aparelho: avisa antes, não depois.
+    const avisoServidor = novo === 'recuperar' && typeof modoServidor === 'function' && modoServidor()
+      ? ' Atenção: o código troca só a senha deste aparelho. Antes, peça a quem cuida do servidor da casa para pôr lá a mesma senha nova; senão o servidor não deixa entrar.'
+      : '';
+    $('acesso-apoio').textContent = m.apoio + avisoServidor;
     $('a-enviar').textContent = m.botao;
     $('a-voltar').hidden = !m.voltar;
     $('a-voltar').textContent = m.voltar ?? '';
@@ -168,7 +172,7 @@
     if (modo === 'primeiro') {
       const r = await criarAdministrador({ nome: v.nome, email: v.email, senha: v.nova, aceitouTermos: aceitou });
       if (!r.ok) return mostrarErro(r.erro);
-      return mostrarCodigo(r.codigoRecuperacao, () => abrirApp({ email: v.email, senha: v.nova }));
+      return mostrarCodigo(r.codigoRecuperacao, () => abrirApp({ email: v.email, senha: v.nova, manter: true }));
     }
     if (modo === 'entrar') {
       const manter = Boolean(v.manter);
@@ -178,20 +182,23 @@
         provisoria = { email: v.email, senha: v.senha, manter };
         return irPara(r.trocarSenha ? 'provisoria' : 'termos');
       }
-      return abrirApp({ email: v.email, senha: v.senha });
+      return abrirApp({ email: v.email, senha: v.senha, manter });
     }
     if (modo === 'provisoria') {
+      // Primeiro confere se o servidor aceita a provisória: se não, nada é trocado e a pessoa não fica presa.
+      const noServidor = await conferirNoServidor(provisoria.email, provisoria.senha);
+      if (!noServidor.ok) return mostrarErro(noServidor.erro);
       const r = await trocarSenha(provisoria.email, provisoria.senha, v.nova, provisoria.manter, aceitou);
       if (!r.ok) return mostrarErro(r.erro);
       // No servidor, entra com a provisória e troca lá também, para as duas senhas continuarem iguais.
-      const credenciais = { email: provisoria.email, senha: provisoria.senha, novaSenha: v.nova };
+      const credenciais = { email: provisoria.email, senha: provisoria.senha, novaSenha: v.nova, manter: provisoria.manter };
       provisoria = null;
       return abrirApp(credenciais);
     }
     if (modo === 'termos') {
       const r = await aceitarTermos(provisoria.email, provisoria.senha, provisoria.manter, aceitou);
       if (!r.ok) return mostrarErro(r.erro);
-      const credenciais = { email: provisoria.email, senha: provisoria.senha };
+      const credenciais = { email: provisoria.email, senha: provisoria.senha, manter: provisoria.manter };
       provisoria = null;
       return abrirApp(credenciais);
     }
@@ -217,7 +224,8 @@
     }
     const email = contaAtual().email;
     const r = await trocarSenha(email, v.senha, v.nova);
-    if (!r.ok) return mostrarErro(r.erro);
+    // Aqui não há campo de e-mail: "E-mail ou senha incorretos" confundiria.
+    if (!r.ok) return mostrarErro(r.erro === 'E-mail ou senha incorretos.' ? 'A senha atual está incorreta.' : r.erro);
     // Com os dados vindo do banco, troca no servidor também. Se ele recusar, volta a senha do aparelho,
     // para as duas continuarem iguais.
     const noServidor = await trocarSenhaNoServidor(v.senha, v.nova);
@@ -313,8 +321,9 @@
     abrirApp();
     return;
   }
-  // Ninguém logado: a cópia dos dados do banco (se houver) não fica no aparelho para a próxima pessoa.
-  if (typeof sairDoServidor === 'function') sairDoServidor();
+  // Ninguém logado nesta aba. Não apaga a cópia do banco aqui: outra aba pode estar aberta com uma sessão
+  // só dela (sem "Manter conectado"). Quem entra só recebe a cópia se ela for dele (servidor.js).
+  if (typeof terminarSaidaPendente === 'function') terminarSaidaPendente();
   try { desenharRecados(); } catch (e) { console.warn(e); } // recados nunca podem impedir a entrada
   $('tela-acesso').hidden = false;
   let guarda = false;

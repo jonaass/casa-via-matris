@@ -36,7 +36,8 @@ python -m uvicorn backend.principal:app --reload
 
 Abra http://localhost:8000. No primeiro acesso o app pede para criar o administrador **do aparelho**:
 use **o mesmo e-mail e a mesma senha** da conta criada no passo 1. Depois do login, os dados vêm do banco.
-As rotas ficam em http://localhost:8000/docs.
+Para ver as rotas em http://localhost:8000/docs, ligue a página com `VM_DOCS=1` no `backend/.env`
+(ela fica desligada por padrão porque carrega scripts de uma CDN).
 
 ### Contas: aparelho e servidor com a mesma senha
 
@@ -49,6 +50,7 @@ Enquanto o login do aparelho não for trocado pelo do servidor, cada pessoa tem 
 - **Trocar senha** (menu Conta): troca nos dois. Se o servidor recusar, o aparelho volta à senha antiga.
 - **Esqueci a senha / código de recuperação:** muda só no aparelho. O app avisa que a senha do servidor ficou
   diferente; quem cuida do servidor acerta com `python -m backend.usuarios senha email@exemplo.com`.
+- **Desativar** quem saiu da equipe: `python -m backend.usuarios desativar email@exemplo.com` (e `ativar` para voltar).
 - **Perfil:** vale o do servidor. A pessoa só vê e faz o que os dois perfis deixam.
 
 O banco fica em `backend/dados/casa-via-matris.db` (fora do Git). Para mudar, veja `.env.example`.
@@ -99,11 +101,16 @@ de lá e daqui ficarem diferentes.
 4. Publicar num servidor com https e domínio próprio. Atrás de um proxy (Nginx, Render, Railway...), rode o
    uvicorn com `--proxy-headers`: sem isso o servidor não sabe que o endereço é https (o cookie sai sem `Secure`)
    e enxerga todo mundo com o IP do proxy (o limite de erros de login por IP passaria a valer para todos juntos).
-5. Em produção, avaliar desligar a página `/docs` (ela carrega arquivos de uma CDN).
+5. Em produção, preencher `VM_ORIGENS` com o endereço do site e usar `VM_COOKIE_SEGURO=1`.
+6. O servidor ainda não conhece a senha provisória nem o aceite dos termos (hoje quem confere é o aparelho):
+   migração com `provisoria`, `termos_versao` e `termos_em`, e o `usuario_logado` recusando quando faltar.
+7. Decidir com o grupo se o Voluntário deve receber o histórico de doações (hoje `/api/doacoes` pede só `ver_estoque`,
+   e no app o Voluntário não tem a página Histórico).
 
 ## Como foi testado
 
-- `python -m pytest backend/tests`: 27 testes da API, das senhas, da importação e do comando de contas.
+- `python -m pytest backend/tests`: 50 testes da API, das senhas, da importação e do comando de contas
+  (na 1.4.0 entraram testes de senhas em paralelo, migração simultânea, nome sem acento, origens e caminhos internos).
 - No navegador (Playwright), 178 verificações em Chromium, Firefox e WebKit, no computador e no tamanho de
   celular: os 4 perfis recebem só o que podem ver, menus e mensagens seguem o perfil do servidor, sair apaga a
   cópia e fecha a sessão, senha provisória, troca de senha (inclusive quando o servidor recusa), esqueci a senha,

@@ -205,6 +205,7 @@ class Login(BaseModel):
     # Tamanho máximo: cada senha custa 600 mil cálculos, e texto gigante não serve para nada.
     email: str = Field(max_length=120)
     senha: str = Field(max_length=seguranca.SENHA_MAXIMA)
+    manter: bool = False  # "Manter conectado": a sessão dura 30 dias, como no aparelho
 
 
 def _conta_publica(u: sqlite3.Row) -> dict:
@@ -220,8 +221,9 @@ def entrar(dados: Login, request: Request, response: Response, con: sqlite3.Conn
     if erro:
         raise ErroDaApi(401, erro)
     _devolver_tentativa(ip)
-    token = seguranca.abrir_sessao(con, usuario["codigo"])
-    response.set_cookie(COOKIE, token, max_age=seguranca.SESSAO_S, httponly=True,
+    duracao = seguranca.SESSAO_LONGA_S if dados.manter else seguranca.SESSAO_S
+    token = seguranca.abrir_sessao(con, usuario["codigo"], duracao)
+    response.set_cookie(COOKIE, token, max_age=duracao, httponly=True,
                         secure=config.cookie_seguro(request.url.scheme == "https"), samesite="strict", path="/")
     return _conta_publica(usuario)
 

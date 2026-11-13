@@ -65,10 +65,10 @@
   // O servidor responde igual para senha errada, conta bloqueada ou desativada (não revela nada a quem é de fora).
   const MSG_SENHA_DIFERENTE = 'O servidor da casa não aceitou esta entrada. A senha precisa ser a mesma no aparelho e no servidor, ' +
     'e a conta do servidor pode estar bloqueada por tentativas erradas (espere 15 minutos) ou desativada. ' +
-    'Se continuar, peça a quem cuida do sistema para conferir (python -m backend.usuarios senha).';
+    'Se continuar, peça a quem cuida do servidor da casa para conferir a sua conta.';
 
-  async function entrarNoServidor(email, senha) {
-    const r = await pedir('api/entrar', { method: 'POST', body: JSON.stringify({ email, senha }) });
+  async function entrarNoServidor(email, senha, manter = false) {
+    const r = await pedir('api/entrar', { method: 'POST', body: JSON.stringify({ email, senha, manter: Boolean(manter) }) });
     if (r.status === 200) return { ok: true };
     // A senha já foi aceita no aparelho: se o servidor recusou com 401, as duas senhas estão diferentes.
     const erro = r.corpo && r.corpo.erro;
@@ -88,6 +88,23 @@
       if (r.status === 200) return { ok: true };
       if (r.status === 401) return falha('Sua sessão no servidor acabou. Saia e entre de novo para trocar a senha.');
       return falha((r.corpo && r.corpo.erro) || 'O servidor não trocou a senha. Tente de novo.');
+    } catch (e) {
+      return falha('A conexão com o servidor caiu. Tente de novo.');
+    }
+  }
+
+  /**
+   * Antes de trocar a senha provisória no aparelho: o servidor aceita esta conta com a provisória?
+   * Se não aceitar, nada muda em lugar nenhum (antes, o aparelho trocava e a pessoa ficava presa).
+   * Sem servidor (GitHub Pages), responde { ok: true }.
+   */
+  async function conferirNoServidor(email, senha) {
+    if (!(await temServidor())) return { ok: true };
+    try {
+      const r = await entrarNoServidor(email, senha);
+      if (r.ok) return r;
+      return falha('A sua conta ainda não está pronta no servidor da casa com esta senha provisória. ' +
+        'Peça ao administrador para conferir; nada foi trocado.');
     } catch (e) {
       return falha('A conexão com o servidor caiu. Tente de novo.');
     }
@@ -125,8 +142,9 @@
     }
     try {
       if (credenciais) {
-        const entrou = await entrarNoServidor(credenciais.email, credenciais.senha);
+        const entrou = await entrarNoServidor(credenciais.email, credenciais.senha, credenciais.manter);
         if (!entrou.ok) return entrou;
+        salvarConfig({ sairPendente: false }); // a sessão antiga foi trocada pela nova
         if (credenciais.novaSenha) {
           const r = await pedir('api/trocar-senha', { method: 'POST', body: JSON.stringify({ senhaAtual: credenciais.senha, novaSenha: credenciais.novaSenha }) });
           if (r.status !== 200) return falha((r.corpo && r.corpo.erro) || 'O servidor não trocou a senha.');
@@ -185,10 +203,26 @@
   function sairDoServidor() {
     if (!modoServidor()) return;
     limparCopia();
-    try {
-      fetch('api/sair', { method: 'POST', credentials: 'same-origin', keepalive: true, headers: { 'Content-Type': 'application/json' } }).catch(() => { });
-    } catch (e) { /* sem servidor: nada a fazer */ }
+    fecharSessaoNoServidor();
   }
 
-  Object.assign(globalThis, { modoServidor, limparCopia, copiaDeOutraPessoa, bloqueadoPeloServidor, puxarDoServidor, sairDoServidor, trocarSenhaNoServidor });
+  /**
+   * POST api/sair. Se falhar (sem internet), anota e tenta de novo na próxima abertura: senão a
+   * sessão do servidor (cookie) continuaria valendo neste navegador por horas.
+   */
+  function fecharSessaoNoServidor() {
+    salvarConfig({ sairPendente: true });
+    try {
+      fetch('api/sair', { method: 'POST', credentials: 'same-origin', keepalive: true, headers: { 'Content-Type': 'application/json' } })
+        .then((r) => { if (r.ok) salvarConfig({ sairPendente: false }); })
+        .catch(() => { });
+    } catch (e) { /* sem servidor: tenta na próxima abertura */ }
+  }
+
+  /** Na abertura, sem ninguém logado: termina um "Sair" que ficou pela metade por falta de internet. */
+  function terminarSaidaPendente() {
+    if (lerConfig().sairPendente) fecharSessaoNoServidor();
+  }
+
+  Object.assign(globalThis, { modoServidor, limparCopia, copiaDeOutraPessoa, conferirNoServidor, terminarSaidaPendente, bloqueadoPeloServidor, puxarDoServidor, sairDoServidor, trocarSenhaNoServidor });
 })();

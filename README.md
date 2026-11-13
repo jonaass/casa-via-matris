@@ -3,7 +3,13 @@
 Projeto de extensão (ODS 10): sistema de controle de **estoque, doações e finanças**
 da Casa Via Matris. Funciona no navegador, instala no celular como um app e abre sem internet.
 
-## Versão 1.3
+## Versão 1.4
+
+A 1.4.0 junta o **back-end em Python do Anthony** (pasta `backend/`, FastAPI + SQLite): aberto pelo
+servidor, o app puxa os dados do banco depois do login, só o que cada perfil pode ver. No GitHub Pages
+nada muda. Nesta etapa o banco só é lido (registrar e desfazer ficam desligados no modo servidor).
+A revisão dos agentes achou e corrigiu falhas de segurança no servidor e na junção com a 1.3; os termos
+mudaram (todos aceitam de novo) para explicar o servidor da casa e o cookie de sessão.
 
 A 1.3.0 veio de uma auditoria completa de design, contraste e bugs, feita pelos agentes do projeto
 (`.claude/agents/`). Entraram o **tema claro automático** (segue o celular), **somar ou dar baixa direto
@@ -107,7 +113,7 @@ mesmo se eles falharem: confira a aba depois de enviar.
 - **Backup**: baixa 3 planilhas (estoque, doações, dinheiro) e restaura delas, mesmo depois de editadas no Excel. Avisa quando o último backup tem mais de 7 dias.
 - **Dados de exemplo**: aparecem na primeira abertura. "Começar do zero" apaga tudo para o uso real.
 - **App no celular**: instala na tela inicial e abre sem internet.
-- **Dados do banco (1.3.0)**: aberto pelo servidor Python, o app entra também no servidor e traz do banco só o que
+- **Dados do banco (1.4.0)**: aberto pelo servidor Python, o app entra também no servidor e traz do banco só o que
   o perfil pode ver (Financeiro não recebe estoque; Almoxarifado e Voluntário não recebem dinheiro). Nesta etapa o
   banco só é lido: registrar e desfazer ficam desligados nesse modo, para nada lançado só no aparelho se perder.
   A conta precisa ter a mesma senha no aparelho e no servidor: trocar a senha (inclusive a provisória do primeiro
@@ -171,7 +177,35 @@ Encontrados na revisão do protótipo. Os marcados como corrigidos têm teste em
 
 ### Corrigidos na 1.4.0
 
-- Com o registrar desligado, a tela tentava marcar uma opção que não existia e dava erro no console. Agora confere antes.
+Revisão da junção do back-end (agentes `espelho-backend`, `revisor-acessos` e `testador-navegador`).
+
+**No servidor (`backend/`)**
+- Várias senhas erradas mandadas ao mesmo tempo não bloqueavam a conta. Agora o erro é somado no próprio banco.
+- Num banco novo, vários pedidos juntos davam erro 500 (a migração rodava a cada pedido). Agora roda uma vez, ao ligar.
+- "Feijão" e "feijao", ou "Óleo" e "óleo", entravam como itens diferentes. Agora o nome é comparado sem acento, como no app (migração 002).
+- Conta bloqueada ou desativada respondia diferente de e-mail inexistente, e a desativada confirmava a senha certa. Agora tudo responde igual.
+- O limite de erros por IP guardava todo IP para sempre (memória crescendo) e deixava passar pedidos em paralelo.
+- A página `/docs` carregava scripts de uma CDN. Agora fica desligada (liga com `VM_DOCS=1` para desenvolver).
+- A conferência contra pedidos de outros sites aceitava http no lugar de https. Agora há a lista `VM_ORIGENS`.
+- A importação aceitava data em formato de semana, apontava a linha errada quando havia linhas em branco, contava linha
+  recusada como "já existia" e não achava o item pelo nome. Agora avisa quando o saldo fica negativo.
+- O histórico mandava `validadeAnterior: null`, que apagaria a validade ao desfazer.
+- "Manter conectado" durava só 8 horas no servidor. Agora dura 30 dias, como no aparelho.
+- Novo comando `python -m backend.usuarios desativar email` (e `ativar`).
+
+**No app, no modo servidor**
+- Abrir uma segunda aba fechava a sessão do servidor e derrubava a primeira.
+- A cópia dos dados do banco podia abrir para outra pessoa quando o servidor estava fora do ar, e outra aba com outra
+  conta trocava os dados de quem estava logado. Agora a cópia tem dono e só abre para ele.
+- Os recados da tela de entrada mostravam itens do banco antes do login.
+- Restaurar planilhas, "Começar do zero" e "Trocar pelos exemplos" gravavam só no aparelho e sumiam no próximo login. Agora ficam desligados.
+- Pessoa nova com senha provisória ficava presa (o aparelho trocava a senha e o servidor recusava). Agora o servidor é conferido antes.
+- "Recuperar com o código" agora avisa antes que a senha do servidor também precisa ser trocada.
+- Trocar senha com o servidor fora do ar deixava as duas senhas diferentes. Sair sem internet deixava a sessão do servidor aberta.
+- Os termos diziam que não havia servidor nem cookies. Foram atualizados (`TERMOS_VERSAO` 2026-11-13).
+- O saldo negativo quebrava a linha no celular; com a senha atual errada, "Trocar senha" falava em "e-mail".
+- Com o registrar desligado, a tela tentava marcar uma opção que não existia e dava erro no console.
+- Testes: `tests/servidor.test.js` (11 testes do modo servidor) e 50 testes do back-end, que agora rodam também no GitHub Actions.
 
 ### Corrigidos na 1.3.0
 

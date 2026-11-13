@@ -15,6 +15,7 @@ globalThis.location = { protocol: 'http:', hostname: 'localhost' };
 let servidorNoAr = true;
 let contaDoServidor = null;
 let pedidos = [];
+let entrarAceita = true;
 const BANCO = {
   itens: [{ codigo: 'b1', nome: 'Arroz do banco', categoria: 'Alimentos', unidade: 'kg', quantidade: 2.5, minimo: 1, validade: null }],
   doacoes: [],
@@ -25,12 +26,13 @@ const PODE = {
   financeiro: ['ver_financeiro', 'entrada_dinheiro', 'saida_dinheiro', 'historico', 'desfazer'],
   voluntario: ['ver_estoque', 'doacao_item', 'saida_item'],
 };
-const json = (status, corpo) => ({ status, json: async () => corpo });
+const json = (status, corpo) => ({ status, ok: status < 400, json: async () => corpo });
 globalThis.fetch = async (caminho) => {
   pedidos.push(caminho);
   if (!servidorNoAr) throw new TypeError('Failed to fetch');
   if (caminho === 'api/saude') return json(200, { ok: true, servico: 'casa-via-matris' });
-  if (caminho === 'api/entrar' || caminho === 'api/sair') return json(200, { ok: true });
+  if (caminho === 'api/entrar') return entrarAceita ? json(200, { ok: true }) : json(401, { erro: 'E-mail ou senha incorretos.' });
+  if (caminho === 'api/sair') return json(200, { ok: true });
   if (caminho === 'api/eu') return contaDoServidor ? json(200, contaDoServidor) : json(401, { erro: 'Sua sessão acabou.' });
   const colecao = caminho.replace('api/', '');
   return json(200, BANCO[colecao]);
@@ -52,6 +54,7 @@ test.beforeEach(() => {
   servidorNoAr = true;
   contaDoServidor = conta('ana@casa.org', 'administrador');
   pedidos = [];
+  entrarAceita = true;
 });
 
 test('sem servidor no ar e sem cópia, nada muda (como no GitHub Pages)', async () => {
@@ -132,4 +135,28 @@ test('trocar a senha com o servidor fora do ar falha, para as senhas não ficare
   await puxarDoServidor({ email: 'ana@casa.org', senha: 'x' });
   servidorNoAr = false;
   assert.equal((await trocarSenhaNoServidor('a', 'b')).ok, false);
+});
+
+test('senha provisória que o servidor não conhece: avisa antes e nada é trocado', async () => {
+  entrarAceita = false;
+  const r = await conferirNoServidor('bia@casa.org', 'provisoria-1');
+  assert.equal(r.ok, false);
+  assert.match(r.erro, /nada foi trocado/);
+  entrarAceita = true;
+  assert.equal((await conferirNoServidor('bia@casa.org', 'provisoria-1')).ok, true);
+});
+
+test('sair sem internet fecha a sessão do servidor na próxima abertura', async () => {
+  await criarAdministrador(ADMIN);
+  await puxarDoServidor({ email: ADMIN.email, senha: ADMIN.senha });
+  servidorNoAr = false;
+  sair();
+  await new Promise((r) => setTimeout(r, 0));
+  assert.equal(lerConfig().sairPendente, true);
+  servidorNoAr = true;
+  pedidos = [];
+  terminarSaidaPendente();
+  await new Promise((r) => setTimeout(r, 0));
+  assert.ok(pedidos.includes('api/sair'));
+  assert.equal(lerConfig().sairPendente, false);
 });

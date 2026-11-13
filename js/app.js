@@ -928,6 +928,7 @@
     const { pagina, pedida } = paginaDoEndereco(location.hash);
     if (pedida) {
       const somenteLeitura = pedida === 'registrar' && modoServidor();
+      $('t-sem-permissao').textContent = somenteLeitura ? 'Ainda não disponível' : 'Sem permissão';
       $('sem-permissao-texto').textContent = somenteLeitura
         ? 'Os dados agora vêm do banco da casa, e registrar por aqui ainda não está disponível. Essa parte chega na próxima versão.'
         : `A página ${PAGINAS[pedida].rotulo} não faz parte do perfil ${PERFIS[perfilEfetivo()].rotulo}. Se você precisa dela, peça ao administrador.`;
