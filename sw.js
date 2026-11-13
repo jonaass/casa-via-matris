@@ -28,6 +28,7 @@ const ARQUIVOS = [
   'js/dados.js',
   'js/store.js',
   'js/backup.js',
+  'js/servidor.js',
   'js/acesso.js',
   'js/login.js',
   'js/app.js',
@@ -76,6 +77,8 @@ self.addEventListener('fetch', (evento) => {
   const url = new URL(pedido.url);
 
   if (url.origin !== self.location.origin) return;
+  // Pedidos à API do back-end vão sempre ao servidor: dado da casa não fica guardado em cache.
+  if (url.pathname.includes('/api/')) return;
 
   // Arquivos do app: responde com o guardado; se não tiver, busca na internet.
   evento.respondWith(
