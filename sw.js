@@ -40,6 +40,7 @@ const ARQUIVOS = [
   'fontes/atkinson-hyperlegible-latin-400-normal.woff2',
   'fontes/atkinson-hyperlegible-latin-700-normal.woff2',
   'fontes/hanken-grotesk-latin-300-normal.woff2',
+  'fontes/hanken-grotesk-latin-400-normal.woff2',
   'fontes/hanken-grotesk-latin-600-normal.woff2',
 ];
 

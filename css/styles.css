@@ -30,6 +30,14 @@
 @font-face {
   font-family: 'Hanken Grotesk';
   font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('../fontes/hanken-grotesk-latin-400-normal.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Hanken Grotesk';
+  font-style: normal;
   font-weight: 600;
   font-display: swap;
   src: url('../fontes/hanken-grotesk-latin-600-normal.woff2') format('woff2');
@@ -73,6 +81,8 @@
      (verde e vermelho se confundem). Só para o gráfico: no resto do app, verde e vermelho seguem como estão. */
   --serie-entrada: #3a8fcf;
   --serie-saida: #c97538;
+  --capsula: rgba(20, 28, 37, 0.86);
+  --placeholder: var(--suave);
   --aviso-fundo: #27333f;
 
   --fonte-titulo: 'Hanken Grotesk', 'Segoe UI', system-ui, sans-serif;
@@ -182,7 +192,7 @@ p {
   padding: 8px 10px 8px 16px;
   border: 1px solid var(--linha);
   border-radius: 999px;
-  background: rgba(20, 28, 37, 0.86);
+  background: var(--capsula);
   backdrop-filter: blur(14px);
 }
 
@@ -296,7 +306,8 @@ p {
   gap: 8px;
 }
 
-#restaurar-sim {
+/* Botão de confirmar algo que não tem volta (apagar, desfazer, desativar): vermelho cheio. */
+.botao-fantasma.perigo {
   background: var(--rubi);
   color: var(--papel);
   border-color: var(--rubi);
@@ -359,12 +370,21 @@ main:focus {
   display: grid;
   grid-template-columns: 1.4fr repeat(3, 1fr);
   border-block: 1px solid var(--linha);
+  /* Cada indicador desenha a borda de cima e da esquerda, e o recorte esconde as que caem na
+     beirada. Assim as divisórias ficam certas com 4, 3 ou 2 indicadores (perfis diferentes). */
+  overflow: hidden;
+}
+
+.resumo[data-blocos='3'] {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .indicador {
   display: block;
   padding: 22px 24px;
   border-left: 1px solid var(--linha);
+  border-top: 1px solid var(--linha);
+  margin: -1px 0 0 -1px;
   min-width: 0;
   color: inherit;
   text-decoration: none;
@@ -385,10 +405,6 @@ a.indicador[href]:hover .indicador-titulo {
   text-underline-offset: 3px;
 }
 
-.indicador:first-child {
-  border-left: 0;
-  padding-left: 0;
-}
 
 .indicador-titulo {
   color: var(--suave);
@@ -405,8 +421,13 @@ a.indicador[href]:hover .indicador-titulo {
   font-variant-numeric: tabular-nums;
 }
 
-.indicador:first-child .indicador-valor {
+#kpi-saldo-bloco .indicador-valor {
   color: var(--pinho);
+}
+
+/* Saldo negativo nunca em verde. */
+#kpi-saldo-bloco.negativo .indicador-valor {
+  color: var(--rubi);
 }
 
 .indicador-nota {
@@ -676,9 +697,13 @@ form {
 }
 
 .tipos input:checked+span {
-  border-color: var(--pinho);
-  background: var(--pinho-claro);
+  border-color: var(--tinta);
+  background: var(--elevado);
   font-weight: 700;
+}
+
+.tipos input:checked+span::before {
+  content: '✓ ';
 }
 
 .tipos input:focus-visible+span {
@@ -705,7 +730,8 @@ form {
 
 .linha {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  /* min(): numa tela de 320 px, 120 px por coluna estouraria o cartão. */
+  grid-template-columns: repeat(auto-fit, minmax(min(170px, 100%), 1fr));
   gap: 12px;
 }
 
@@ -719,6 +745,10 @@ form {
 
 [hidden] {
   display: none !important;
+}
+
+input[type='date'] {
+  min-width: 0; /* o campo de data tem largura mínima própria e estourava a coluna */
 }
 
 input,
@@ -1267,10 +1297,6 @@ select[aria-invalid='true'] {
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
 }
 
-.indicador[hidden]+.indicador {
-  border-left: 0;
-  padding-left: 0;
-}
 
 .tipos[data-opcoes='2'] {
   grid-template-columns: 1fr 1fr;
@@ -1367,18 +1393,16 @@ select[aria-invalid='true'] {
 /* ---------- telas menores ---------- */
 
 @media (max-width: 1100px) {
-  .resumo {
+  .resumo,
+  .resumo[data-blocos='3'] {
     grid-template-columns: 1fr 1fr;
   }
 
-  .indicador:nth-child(3) {
-    border-left: 0;
-    padding-left: 0;
+  /* Com 3 indicadores em duas colunas, o último ocupa a linha toda (sem buraco ao lado). */
+  .resumo[data-blocos='3'] > .indicador:last-child {
+    grid-column: 1 / -1;
   }
 
-  .indicador:nth-child(n + 3) {
-    border-top: 1px solid var(--linha);
-  }
 }
 
 @media (max-width: 960px) {
@@ -1780,7 +1804,7 @@ a.botao {
   .tabela-historico td[data-rotulo='Quem']::before { content: 'Quem: '; color: var(--suave); }
   /* Desfazer pequeno e à direita: é uma ação rara, não pode pesar mais que o lançamento. */
   .tabela-historico .acao { grid-column: 1 / -1; text-align: right; }
-  .tabela-historico .acao .botao-fantasma { min-height: 40px; padding: 6px 14px; font-size: 0.875rem; color: var(--suave); }
+  .tabela-historico .acao .botao-fantasma { min-height: 44px; padding: 6px 14px; font-size: 0.875rem; }
 }
 
 @media (max-width: 560px) {
@@ -1878,4 +1902,472 @@ a.botao {
   text-decoration: none;
   display: inline-flex;
   align-items: center;
+}
+
+
+/* =====================================================================
+   Versão 1.3: correções da auditoria de design de 13/11/2026
+   ===================================================================== */
+
+/* Texto de exemplo dentro dos campos: o cinza padrão do navegador (#757575) ficava em 3,7:1. */
+::placeholder {
+  color: var(--placeholder);
+  opacity: 1;
+}
+
+/* Números e datas na fonte dos títulos: o zero cortado da Atkinson ("R$ 5Ø0") parecia erro. */
+.num,
+.tabela time,
+.indicador-nota,
+.item-rodape,
+.topo-data,
+.historico-total,
+.grafico-mes-atual,
+.grafico-dica,
+.conta-termos,
+.auditoria time,
+#f-valor,
+#f-quantidade,
+#f-novo-minimo,
+input[type='date'],
+.item-rapido input {
+  font-family: var(--fonte-titulo);
+  font-variant-numeric: tabular-nums;
+}
+
+.tabela .num.positivo,
+.tabela .num.negativo {
+  font-weight: 600;
+}
+
+/* Pendência = atenção (calêndula), não erro (rubi). */
+.etiqueta.pendente {
+  background: var(--calendula-fundo);
+  color: var(--calendula-texto);
+}
+
+/* Desfazer discreto: ação rara não pode pesar mais que o lançamento. */
+.botao-fantasma.discreto {
+  color: var(--suave);
+  border-color: var(--borda-campo);
+}
+
+.botao-fantasma.discreto:hover {
+  color: var(--tinta);
+}
+
+.botao-fantasma:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* Barras do estoque com contorno: dá para ver onde a barra termina (antes 1,5:1). */
+.barra {
+  box-shadow: inset 0 0 0 1px var(--borda-campo);
+}
+
+.prateleira-item.zerado .barra {
+  background: var(--trilho);
+  box-shadow: inset 0 0 0 1.5px var(--rubi);
+}
+
+/* Botão "Conta" com borda visível e seta: antes parecia texto solto. */
+.opcoes summary {
+  border-color: var(--borda-campo);
+  gap: 8px;
+}
+
+.opcoes summary::after {
+  content: '▾';
+  font-size: 0.8em;
+  color: var(--suave);
+}
+
+.opcoes-titulo {
+  font-family: var(--fonte-texto);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--suave);
+  margin: 10px 0 0;
+}
+
+.perigo-titulo {
+  color: var(--rubi-texto);
+}
+
+.botao-perigoso {
+  color: var(--rubi-texto);
+}
+
+.opcoes-versao {
+  font-size: 0.8125rem;
+}
+
+/* "Ver os valores em tabela" e "Registro de atividades" com seta: parecem clicáveis. */
+.grafico-tabela summary::before,
+.auditoria summary::before {
+  content: '▸';
+  margin-right: 8px;
+}
+
+.grafico-tabela[open] > summary::before,
+.auditoria[open] > summary::before {
+  content: '▾';
+}
+
+.grafico-tabela summary,
+.auditoria summary {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* Busca com rótulo visível (o placeholder sozinho some ao digitar). */
+.campo-busca {
+  display: grid;
+  gap: 6px;
+}
+
+.campo-busca-rotulo {
+  font-weight: 700;
+  font-size: 0.9375rem;
+}
+
+.filtros {
+  align-items: end;
+}
+
+.vazio a {
+  color: var(--calendula-texto);
+  text-underline-offset: 3px;
+}
+
+/* Somar ou dar baixa direto no item. */
+.item-acoes {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  align-self: center;
+  gap: 8px;
+}
+
+.item-acoes .botao-fantasma {
+  color: var(--suave);
+  border-color: var(--borda-campo);
+}
+
+.item-acoes .botao-fantasma:not(:disabled):hover {
+  color: var(--tinta);
+}
+
+.item-rapido {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border-radius: var(--raio-pequeno);
+  background: var(--papel);
+}
+
+.item-rapido label {
+  font-weight: 700;
+  font-size: 0.9375rem;
+}
+
+.item-rapido-linha {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.item-rapido-linha input {
+  flex: 1 1 120px;
+  width: auto;
+}
+
+.botao-pequeno {
+  min-height: 44px;
+  padding: 8px 18px;
+  font-size: 0.9375rem;
+}
+
+.item-rapido-mais {
+  justify-self: start;
+  padding: 0;
+  font-size: 0.9375rem;
+}
+
+/* Cartão "Cópia dos dados" na Visão geral (só administrador). */
+.cartao-backup {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px 24px;
+}
+
+.cartao-backup h2 {
+  margin-bottom: 6px;
+}
+
+/* Acessos: a própria conta mostra o perfil como texto. */
+.conta-eu {
+  color: var(--suave);
+  font-size: 0.9375rem;
+}
+
+.matriz td,
+.matriz th {
+  vertical-align: top;
+}
+
+.form-conta .botao {
+  min-height: 44px;
+}
+
+.pular {
+  padding: 11px 14px;
+}
+
+.grafico text {
+  font-size: 13px;
+  font-family: var(--fonte-titulo);
+}
+
+/* Ações do item na mesma linha do rodapé, à direita: o item não fica mais alto por causa delas. */
+.prateleira-item {
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 12px;
+}
+
+.prateleira-item > .item-topo,
+.prateleira-item > .barra,
+.prateleira-item > .item-rapido {
+  grid-column: 1 / -1;
+}
+
+.prateleira-item > .item-rodape {
+  align-self: center;
+}
+
+/* Erro logo abaixo do campo. */
+.campo > .erro {
+  font-size: 0.9375rem;
+}
+
+/* Hover só onde existe mouse: no celular o sublinhado ficava preso depois do toque. */
+@media (hover: none) {
+  a.indicador[href]:hover {
+    background: none;
+  }
+
+  a.indicador[href]:hover .indicador-titulo {
+    color: var(--suave);
+    text-decoration: none;
+  }
+
+  .lateral nav a:hover {
+    background: none;
+    color: var(--suave);
+  }
+
+  .lateral nav a[aria-current='page']:hover {
+    background: var(--elevado);
+    color: var(--tinta);
+  }
+}
+
+/* Estoque no computador: duas colunas, para o olho não viajar 1.150 px entre o nome e a quantidade. */
+@media (min-width: 1100px) {
+  .prateleira {
+    grid-template-columns: 1fr 1fr;
+    column-gap: 48px;
+  }
+
+  .prateleira-item:nth-child(2) {
+    border-top: 0;
+    padding-top: 0;
+  }
+}
+
+/* Tabela de perfis: no celular vira um cartão por perfil. */
+.matriz-cartoes {
+  display: none;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  gap: 12px;
+}
+
+.perfil-cartao {
+  display: grid;
+  gap: 8px;
+  padding: 16px;
+  border: 1px solid var(--linha);
+  border-radius: var(--raio-pequeno);
+}
+
+.perfil-cartao h3 {
+  margin: 0;
+  font-size: 1.0625rem;
+}
+
+.perfil-lista {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+  font-size: 0.9375rem;
+}
+
+.perfil-lista .sim::before {
+  content: '✓';
+  display: inline-block;
+  width: 1.4em;
+  color: var(--pinho-texto);
+  font-weight: 700;
+}
+
+.perfil-lista .nao {
+  color: var(--suave);
+  text-decoration: line-through;
+}
+
+.perfil-lista .nao::before {
+  content: '–';
+  display: inline-block;
+  width: 1.4em;
+  text-decoration: none;
+}
+
+@media (max-width: 640px) {
+  .matriz-cartoes {
+    display: grid;
+  }
+
+  .matriz-tabela {
+    display: none;
+  }
+}
+
+@media (max-width: 560px) {
+  .filtro-historico {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 4.5rem 1fr;
+  }
+
+  .filtro-historico select {
+    width: 100%;
+  }
+
+  .chips span {
+    padding: 10px 12px;
+  }
+
+  .conta-acoes {
+    width: 100%;
+  }
+
+  .conta-acoes label {
+    flex: 1 1 100%;
+  }
+
+  .conta-acoes select {
+    width: 100%;
+  }
+
+  .aviso {
+    flex-wrap: wrap;
+  }
+
+  .aviso-acoes {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .cartao-backup .botao {
+    width: 100%;
+  }
+}
+
+/* ---------- tema claro automático ----------
+   Segue o celular: de dia, ao sol, o tema claro cansa menos a vista. As cores foram conferidas
+   com a mesma fórmula de contraste (WCAG AA). A tela de entrada continua noturna de propósito. */
+@media (prefers-color-scheme: light) {
+  :root {
+    color-scheme: light;
+    --tinta: #1b2531;
+    --suave: #4a5866;
+    --papel: #f7f4ee;
+    --superficie: #ffffff;
+    --elevado: #f3efe7;
+    --linha: #ddd6c9;
+    --trilho: #e6e0d4;
+    --brilho: rgba(240, 179, 90, 0.14);
+    --pinho: #1d7a5a;
+    --pinho-claro: #e1f3eb;
+    --pinho-texto: #155c44;
+    --calendula: #a5690f;
+    --calendula-texto: #8a5a12;
+    --calendula-fundo: #fbf0dc;
+    --rubi: #c0392f;
+    --rubi-texto: #a1302a;
+    --rubi-claro: #fbe4e1;
+    --foco: #0a5fb4;
+    --borda-campo: #7a8794;
+    --acao: #1b2531;
+    --acao-hover: #0c1219;
+    --acao-texto: #ffffff;
+    --erro-fundo: #fdeeee;
+    --aviso-fundo: #1b2531;
+    --serie-entrada: #2a72ad;
+    --serie-saida: #b0602a;
+    --capsula: rgba(255, 255, 255, 0.9);
+    --placeholder: #5c6a78;
+  }
+
+  /* O aviso (toast) continua escuro nos dois temas: destaca do resto e mantém o contraste. */
+  .aviso {
+    color: #f2efe8;
+  }
+
+  .aviso .botao-fantasma {
+    color: #f5c67f;
+  }
+
+  .prateleira-item.zerado .barra,
+  .barra-minimo {
+    --superficie: #ffffff;
+  }
+
+  .lateral {
+    box-shadow: 0 6px 24px rgba(27, 37, 49, 0.08);
+  }
+
+  /* A tela de entrada fica noturna: a coluna do formulário usa as cores escuras originais. */
+  .acesso {
+    --tinta: #f2efe8;
+    --suave: #a9b4bf;
+    --papel: #0c1219;
+    --superficie: #141c25;
+    --elevado: #1b2531;
+    --linha: #2a3642;
+    --borda-campo: #6b7a88;
+    --calendula-texto: #f5c67f;
+    --rubi: #ff8f87;
+    --foco: #7cc4ff;
+    --acao: #f2efe8;
+    --acao-hover: #f5c67f;
+    --acao-texto: #0c1219;
+    --placeholder: #a9b4bf;
+    color-scheme: dark;
+    background: #0c1219;
+    color: var(--tinta);
+  }
+
+  body:has(> .acesso:not([hidden])) {
+    background: #0c1219;
+  }
 }

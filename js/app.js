@@ -9,7 +9,7 @@
 (function () {
   'use strict';
 
-  const { criarStore, TIPOS, CATEGORIAS, DIAS_ALERTA_VALIDADE, DOADOR_ANONIMO } = window.ViaMatris;
+  const { criarStore, TIPOS, CATEGORIAS, DIAS_ALERTA_VALIDADE, DOADOR_ANONIMO, semAcento } = window.ViaMatris;
   const store = criarStore({ permitir: pode });
   const conta = contaAtual();
 
@@ -39,25 +39,37 @@
 
   function desenharResumo() {
     const r = store.resumo();
-    $('kpi-saldo').textContent = brl.format(r.saldoCentavos / 100);
-    $('kpi-saldo-nota').textContent =
-      `Neste mês: entrou ${brl.format(r.entradasMes / 100)}, saiu ${brl.format(r.saidasMes / 100)}`;
-
-    $('kpi-minimo').textContent = r.abaixoDoMinimo.length;
-    $('kpi-minimo-nota').textContent = r.abaixoDoMinimo.length
-      ? r.abaixoDoMinimo.map((i) => i.nome).join(', ')
-      : 'Tudo acima do mínimo';
-    $('kpi-minimo-bloco').classList.toggle('alerta', r.abaixoDoMinimo.length > 0);
-
-    $('kpi-validade').textContent = r.vencendo.length;
-    $('kpi-validade-nota').textContent = r.vencendo.length
-      ? r.vencendo.map((i) => i.nome).join(', ')
-      : 'Nenhum item perto de vencer';
-    $('kpi-validade-bloco').classList.toggle('atencao', r.vencendo.length > 0);
-
-    // Cada perfil conta só as doações da própria área: o almoxarifado não fica sabendo do dinheiro.
+    // Cada perfil recebe na página só os números da própria área (não basta esconder o bloco).
     const verItens = pode('ver_estoque');
     const verDinheiro = pode('ver_financeiro');
+
+    if (verDinheiro) {
+      $('kpi-saldo').textContent = brl.format(r.saldoCentavos / 100);
+      $('kpi-saldo-nota').textContent =
+        `Neste mês: entrou ${brl.format(r.entradasMes / 100)}, saiu ${brl.format(r.saidasMes / 100)}`;
+      // Saldo negativo (por exemplo, depois de restaurar planilhas incompletas) não pode sair em verde.
+      $('kpi-saldo-bloco').classList.toggle('negativo', r.saldoCentavos < 0);
+    }
+
+    if (verItens) {
+      const zerados = r.abaixoDoMinimo.filter((i) => i.quantidade === 0).length;
+      $('kpi-minimo').textContent = r.abaixoDoMinimo.length;
+      $('kpi-minimo-nota').textContent = r.abaixoDoMinimo.length
+        ? r.abaixoDoMinimo.map((i) => (i.quantidade === 0 ? `${i.nome} (acabou)` : i.nome)).join(', ')
+        : 'Tudo acima do mínimo';
+      // Abaixo do mínimo é atenção (calêndula); só fica vermelho quando algum item acabou.
+      $('kpi-minimo-bloco').classList.toggle('atencao', r.abaixoDoMinimo.length > 0 && !zerados);
+      $('kpi-minimo-bloco').classList.toggle('alerta', zerados > 0);
+
+      const vencidos = new Set(r.vencidos.map((i) => i.codigo));
+      $('kpi-validade').textContent = r.vencendo.length;
+      $('kpi-validade-nota').textContent = r.vencendo.length
+        ? r.vencendo.map((i) => (vencidos.has(i.codigo) ? `${i.nome} (vencido)` : i.nome)).join(', ')
+        : 'Nenhum item vencido ou perto de vencer';
+      $('kpi-validade-bloco').classList.toggle('atencao', r.vencendo.length > 0 && !vencidos.size);
+      $('kpi-validade-bloco').classList.toggle('alerta', vencidos.size > 0);
+    }
+
     const itens = verItens ? r.doacoesItens : 0;
     const dinheiro = verDinheiro ? r.doacoesDinheiro : 0;
     $('kpi-doacoes').textContent = itens + dinheiro;
@@ -208,6 +220,8 @@
   // ---------- despensa ----------
 
   const filtro = { texto: '', categoria: '' };
+  // Ação rápida aberta num item do estoque: { codigo, tipo } ou null.
+  let rapido = null;
 
   function situacao(item) {
     if (item.quantidade === 0) return { classe: 'zerado', texto: 'Acabou' };
@@ -217,11 +231,12 @@
   }
 
   function desenharDespensa() {
-    const busca = filtro.texto.toLocaleLowerCase('pt-BR');
+    // Busca sem acento: no celular quase ninguém digita "feijão" com til.
+    const busca = semAcento(filtro.texto);
     // Ordena pelo item mais "apertado" primeiro: quem precisa de atenção aparece no topo.
     const itens = store.itens()
       .filter((i) => !filtro.categoria || i.categoria === filtro.categoria)
-      .filter((i) => !busca || i.nome.toLocaleLowerCase('pt-BR').includes(busca))
+      .filter((i) => !busca || semAcento(i.nome).includes(busca))
       .sort((a, b) => (a.quantidade / (a.minimo || 1)) - (b.quantidade / (b.minimo || 1)));
 
     const lista = $('lista-itens');
@@ -256,9 +271,115 @@
         el('div', { class: 'item-rodape' },
           el('span', { class: 'situacao' }, s.texto),
           el('span', {}, `mín. ${textoDaQuantidade(item.minimo, item.unidade)}`),
-          validade));
+          validade),
+        acoesDoItem(item));
     }));
     $('lista-vazia').hidden = itens.length > 0;
+  }
+
+  /*
+   * Somar ou dar baixa direto no item, sem ir até Registrar e procurar o item de novo.
+   * Passa pelas mesmas regras (store.registrar): não deixa sair mais do que existe.
+   * Para informar doador, validade ou motivo, o link leva ao Registrar já com o item escolhido.
+   */
+  const ROTULOS_RAPIDOS = { saida_item: 'Quanto saiu?', doacao_item: 'Quanto chegou?' };
+
+  function acoesDoItem(item) {
+    const pode_ = { saida_item: pode('saida_item'), doacao_item: pode('doacao_item') };
+    if (!pode_.saida_item && !pode_.doacao_item) return null;
+    if (rapido?.codigo === item.codigo) {
+      const id = `rapido-${item.codigo}`;
+      return el('form', { class: 'item-rapido', 'data-codigo': item.codigo, novalidate: true },
+        el('label', { for: id }, `${ROTULOS_RAPIDOS[rapido.tipo]} `, el('span', { class: 'unidade' }, `(${item.unidade})`)),
+        el('div', { class: 'item-rapido-linha' },
+          el('input', { id, name: 'quantidade', inputmode: 'decimal', autocomplete: 'off', 'aria-describedby': `${id}-erro` }),
+          el('button', { type: 'submit', class: 'botao botao-pequeno' }, rapido.tipo === 'saida_item' ? 'Dar baixa' : 'Somar'),
+          el('button', { type: 'button', class: 'botao-fantasma', 'data-rapido': 'cancelar' }, 'Cancelar')),
+        el('p', { class: 'erro', id: `${id}-erro`, role: 'alert' }),
+        el('button', { type: 'button', class: 'link item-rapido-mais', 'data-rapido': 'detalhes' },
+          rapido.tipo === 'saida_item' ? 'Informar para onde foi e o motivo' : 'Informar doador e validade'));
+    }
+    return el('div', { class: 'item-acoes' },
+      pode_.saida_item && el('button', {
+        type: 'button', class: 'botao-fantasma', 'data-rapido': 'saida_item', 'data-codigo': item.codigo,
+        disabled: item.quantidade === 0, 'aria-label': `Dar baixa em ${item.nome}`,
+      }, '− Saiu'),
+      pode_.doacao_item && el('button', {
+        type: 'button', class: 'botao-fantasma', 'data-rapido': 'doacao_item', 'data-codigo': item.codigo,
+        'aria-label': `Somar doação de ${item.nome}`,
+      }, '+ Chegou'));
+  }
+
+  function focarNoItem(codigo, seletor) {
+    const li = [...$('lista-itens').children].find((l) => l.querySelector(`[data-codigo="${CSS.escape(codigo)}"]`));
+    li?.querySelector(seletor)?.focus();
+  }
+
+  $('lista-itens').addEventListener('click', (e) => {
+    const botao = e.target.closest('button[data-rapido]');
+    if (!botao || conferirSessao()) return;
+    const acao = botao.dataset.rapido;
+    if (!rapido && (acao === 'cancelar' || acao === 'detalhes')) { desenharDespensa(); return; }
+    if (acao === 'cancelar') {
+      const codigo = rapido.codigo;
+      rapido = null;
+      desenharDespensa();
+      focarNoItem(codigo, '.item-acoes button');
+      return;
+    }
+    if (acao === 'detalhes') {
+      const { tipo, codigo } = rapido;
+      const quantidade = botao.closest('form').elements.quantidade.value;
+      rapido = null;
+      desenharDespensa(); // fecha o mini-formulário antes de sair da página
+      abrirRegistrarCom(tipo, codigo, quantidade);
+      return;
+    }
+    rapido = { codigo: botao.dataset.codigo, tipo: acao };
+    desenharDespensa();
+    focarNoItem(rapido.codigo, 'input');
+  });
+
+  $('lista-itens').addEventListener('submit', (e) => {
+    e.preventDefault();
+    if (conferirSessao() || !rapido) return;
+    const formRapido = e.target;
+    const { codigo, tipo } = rapido;
+    const r = store.registrar({ tipo, itemId: codigo, quantidade: formRapido.elements.quantidade.value, data: dataDeHoje() });
+    if (!r.ok) {
+      formRapido.querySelector('.erro').textContent = r.erro;
+      formRapido.elements.quantidade.setAttribute('aria-invalid', 'true');
+      formRapido.elements.quantidade.focus();
+      return;
+    }
+    const item = store.item(codigo);
+    const detalhe = `${textoDaQuantidade(r.movimento.quantidade, item.unidade)} de ${item.nome}`;
+    rapido = null;
+    registrarAuditoria(textosPorTipo[tipo].feito, detalhe);
+    atualizarTudo();
+    avisar(`${textosPorTipo[tipo].feito}: ${detalhe}.`, pode('desfazer') ? r.movimento.codigo : null);
+    focarNoItem(codigo, '.item-acoes button:not(:disabled)');
+  });
+
+  $('lista-itens').addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape' || !rapido) return;
+    e.preventDefault();
+    const codigo = rapido.codigo;
+    rapido = null;
+    desenharDespensa();
+    focarNoItem(codigo, '.item-acoes button');
+  });
+
+  // Abre o Registrar já com o tipo e o item escolhidos (e a quantidade, se já foi digitada).
+  function abrirRegistrarCom(tipo, codigo, quantidade = '') {
+    const radio = [...form.elements.tipo].find((r) => r.value === tipo && !r.disabled);
+    if (!radio) return;
+    radio.checked = true;
+    ajustarCampos();
+    $('f-item').value = codigo;
+    ajustarCampos();
+    $('f-quantidade').value = quantidade;
+    location.hash = '#/registrar';
   }
 
   // ---------- formulário ----------
@@ -278,7 +399,8 @@
   function preencherItens() {
     const select = $('f-item');
     const anterior = select.value;
-    const itens = store.itens();
+    // Quem não vê o estoque (Financeiro) não recebe a lista de itens nem as quantidades.
+    const itens = pode('ver_estoque') ? store.itens() : [];
     const grupos = CATEGORIAS.map((cat) =>
       el('optgroup', { label: cat },
         itens.filter((i) => i.categoria === cat)
@@ -305,9 +427,13 @@
     // Deixa claro o que pode ficar em branco, para ninguém travar num campo que não é obrigatório.
     $('r-pessoa').replaceChildren(t.pessoa, ' ', el('span', { class: 'opcional' }, '(se quiser)'));
     // Doação de itens ou de dinheiro sem nome fica como "Doador anônimo" (regra no store.js).
+    // Na saída de itens, lembra de usar o setor: o nome de quem é acolhido não pode ir para o sistema.
     const doacao = tipo === 'entrada_dinheiro' || tipo === 'doacao_item';
-    $('f-pessoa-dica').hidden = !doacao;
-    $('f-pessoa').placeholder = doacao ? DOADOR_ANONIMO : '';
+    const dica = doacao ? 'Em branco, fica registrado como “Doador anônimo”.'
+      : tipo === 'saida_item' ? 'Use o setor (Cozinha, Limpeza), nunca o nome de quem recebeu.' : '';
+    $('f-pessoa-dica').textContent = dica;
+    $('f-pessoa-dica').hidden = !dica;
+    $('f-pessoa').placeholder = doacao ? DOADOR_ANONIMO : tipo === 'saida_item' ? 'Ex.: Cozinha' : '';
     $('r-descricao').replaceChildren(t.descricao, t.descricaoOpcional ? ' ' : '', t.descricaoOpcional ? el('span', { class: 'opcional' }, '(se quiser)') : '');
     $('f-enviar').textContent = t.botao;
     const item = store.item($('f-item').value);
@@ -315,16 +441,23 @@
     mostrarErro('');
   }
 
+  // A mensagem de erro fica logo abaixo do campo com problema (e volta para perto do botão quando não há campo).
+  const lugarDoErro = $('erro-form').nextElementSibling;
+
   function mostrarErro(msg, campo) {
     $('erro-form').textContent = msg;
     form.querySelectorAll('[aria-invalid]').forEach((c) => {
       c.removeAttribute('aria-invalid');
-      c.removeAttribute('aria-describedby');
+      c.setAttribute('aria-describedby', (c.getAttribute('aria-describedby') ?? '').replace('erro-form', '').trim());
+      if (!c.getAttribute('aria-describedby')) c.removeAttribute('aria-describedby');
     });
+    const caixa = campo?.closest('.campo');
+    if (caixa) caixa.append($('erro-form'));
+    else form.insertBefore($('erro-form'), lugarDoErro);
     if (campo) {
       campo.setAttribute('aria-invalid', 'true');
       // Faz o leitor de tela ler o motivo do erro quando o foco chega no campo.
-      campo.setAttribute('aria-describedby', 'erro-form');
+      campo.setAttribute('aria-describedby', `${campo.getAttribute('aria-describedby') ?? ''} erro-form`.trim());
       campo.focus();
     }
   }
@@ -346,8 +479,17 @@
     return achado ? $(achado[1]) : null;
   }
 
+  // Depois de gravar, o formulário fica limpo: um segundo toque logo em seguida mostraria um erro
+  // falso ("Informe uma quantidade"), e a pessoa poderia achar que falhou e lançar de novo.
+  // Só ignora esse toque duplo: se a pessoa já digitou algo novo, o lançamento segue normalmente.
+  let gravouEm = 0;
+  let mexeuDepois = true;
+  form.addEventListener('input', () => { mexeuDepois = true; });
+  form.addEventListener('change', () => { mexeuDepois = true; });
+
   form.addEventListener('submit', (evento) => {
     evento.preventDefault();
+    if (!mexeuDepois && Date.now() - gravouEm < 1500) return;
     // Sessão vencida com a página aberta: volta para a entrada, em vez de dizer "seu perfil não pode".
     if (conferirSessao()) return;
     atualizarData(); // o dia pode ter virado com a tela aberta
@@ -379,6 +521,8 @@
       return;
     }
 
+    gravouEm = Date.now();
+    mexeuDepois = false;
     const mov = resultado.movimento;
     const item = mov.itemId ? store.item(mov.itemId) : null;
     const detalhe = item
@@ -406,12 +550,22 @@
   let temporizador = null;
   let ultimoId = null;
 
+  let focoAntesDoAviso = null;
+
+  // Ao fechar com o foco dentro do aviso, devolve o foco para onde a pessoa estava (ou para o título).
   function fecharAviso() {
     clearTimeout(temporizador);
+    const tinhaFoco = $('aviso').contains(document.activeElement);
     $('aviso').classList.remove('visivel');
     $('aviso-desfazer').hidden = true;
     $('aviso-fechar').hidden = true;
     ultimoId = null;
+    if (tinhaFoco) focarDepois(focoAntesDoAviso);
+  }
+
+  // Foco num lugar que ainda existe: o elemento pedido, ou o título da página aberta.
+  function focarDepois(alvo) {
+    (alvo?.isConnected && !alvo.disabled && !alvo.closest('[hidden]') ? alvo : document.querySelector('.pagina:not([hidden]) h1'))?.focus();
   }
 
   function agendarFechamento() {
@@ -420,7 +574,9 @@
   }
 
   function avisar(texto, idDesfazer = null) {
-    $('aviso-texto').textContent = texto;
+    // Limpa antes de escrever: a mesma frase duas vezes seguidas também é anunciada pelo leitor de tela.
+    $('aviso-texto').textContent = '';
+    requestAnimationFrame(() => { $('aviso-texto').textContent = texto; });
     ultimoId = idDesfazer;
     $('aviso-desfazer').hidden = !idDesfazer;
     $('aviso-fechar').hidden = false;
@@ -429,7 +585,14 @@
   }
 
   $('aviso').addEventListener('mouseenter', () => clearTimeout(temporizador));
-  $('aviso').addEventListener('focusin', () => clearTimeout(temporizador));
+  $('aviso').addEventListener('focusin', (e) => {
+    clearTimeout(temporizador);
+    if (!$('aviso').contains(e.relatedTarget)) focoAntesDoAviso = e.relatedTarget;
+  });
+  // Saiu do aviso pelo teclado: o tempo volta a correr (antes, o aviso ficava na tela para sempre).
+  $('aviso').addEventListener('focusout', (e) => {
+    if ($('aviso').classList.contains('visivel') && !$('aviso').contains(e.relatedTarget)) agendarFechamento();
+  });
   $('aviso').addEventListener('mouseleave', () => { if ($('aviso').classList.contains('visivel')) agendarFechamento(); });
   $('aviso-fechar').addEventListener('click', fecharAviso);
 
@@ -439,6 +602,7 @@
     if (r.ok) registrarAuditoria('Desfez uma movimentação');
     atualizarTudo();
     avisar(r.ok ? 'Movimentação desfeita.' : r.erro);
+    focarDepois(focoAntesDoAviso); // o botão Desfazer some: o foco não pode cair no começo da página
   });
 
   // ---------- histórico ----------
@@ -464,7 +628,7 @@
     const todos = visiveis
       .filter((m) => !area || TIPOS[m.tipo].area === area)
       .filter((m) => !mes || m.data.startsWith(mes))
-      .sort((a, b) => b.data.localeCompare(a.data) || b.criadoEm.localeCompare(a.criadoEm));
+      .sort((a, b) => b.data.localeCompare(a.data) || String(b.criadoEm ?? '').localeCompare(String(a.criadoEm ?? '')));
     const movs = todos.slice(0, LIMITE_HISTORICO);
     // Sem este aviso, a movimentação mais antiga some da tabela e parece ter sido apagada.
     $('historico-limite').hidden = todos.length <= LIMITE_HISTORICO;
@@ -498,12 +662,14 @@
         el('td', { 'data-rotulo': 'Detalhe' }, detalhe || '—'),
         el('td', { 'data-rotulo': 'Quem' }, m.pessoa || '—'),
         el('td', { 'data-rotulo': 'Quantidade ou valor', class: `num ${tipo.sinal > 0 ? 'positivo' : 'negativo'}` }, valor),
-        el('td', { class: 'acao' }, pode('desfazer') && el('button', {
+        // Desfazer discreto (é ação rara); no segundo toque vira um botão de perigo, bem diferente.
+        // Movimentação de item que já foi apagado não pode ser desfeita: nem oferece o botão.
+        el('td', { class: 'acao' }, pode('desfazer') && (tipo.area !== 'estoque' || item) && el('button', {
           type: 'button',
-          class: 'botao-fantasma',
+          class: pedindoConfirmacao === m.codigo ? 'botao-fantasma perigo' : 'botao-fantasma discreto',
           'data-codigo': m.codigo,
-          'aria-label': `${pedindoConfirmacao === m.codigo ? 'Confirmar: desfazer' : 'Desfazer'} ${tipo.rotulo}, ${valor}, ${dataCurta(m.data)}`,
-        }, pedindoConfirmacao === m.codigo ? 'Confirmar' : 'Desfazer')));
+          'aria-label': `${pedindoConfirmacao === m.codigo ? 'Sim, desfazer' : 'Desfazer'} ${tipo.rotulo}, ${valor}, ${dataCurta(m.data)}`,
+        }, pedindoConfirmacao === m.codigo ? 'Sim, desfazer' : 'Desfazer')));
     }));
     $('historico-vazio').hidden = movs.length > 0;
     $('historico-vazio').textContent = visiveis.length
@@ -512,24 +678,46 @@
   }
 
   // Dois toques: o primeiro pede confirmação na própria linha, o segundo desfaz.
+  // A confirmação vale por 10 segundos e é cancelada ao trocar de página ou de filtro.
   let pedindoConfirmacao = null;
+  let fimDaConfirmacao = null;
+
+  function cancelarConfirmacao() {
+    clearTimeout(fimDaConfirmacao);
+    if (!pedindoConfirmacao) return;
+    pedindoConfirmacao = null;
+    desenharHistorico();
+  }
 
   $('corpo-historico').addEventListener('click', (e) => {
     const botao = e.target.closest('button[data-codigo]');
     if (!botao || conferirSessao()) return;
     const codigo = botao.dataset.codigo;
 
+    const botoes = () => [...$('corpo-historico').querySelectorAll('button[data-codigo]')];
     if (pedindoConfirmacao !== codigo) {
       pedindoConfirmacao = codigo;
       desenharHistorico();
-      [...$('corpo-historico').querySelectorAll('button[data-codigo]')].find((b) => b.dataset.codigo === codigo).focus();
+      botoes().find((b) => b.dataset.codigo === codigo).focus();
+      clearTimeout(fimDaConfirmacao);
+      fimDaConfirmacao = setTimeout(() => {
+        const comFoco = document.activeElement?.dataset?.codigo === pedindoConfirmacao;
+        const quem = pedindoConfirmacao;
+        cancelarConfirmacao();
+        if (comFoco) botoes().find((b) => b.dataset.codigo === quem)?.focus();
+      }, 10000);
       return;
     }
+    clearTimeout(fimDaConfirmacao);
     pedindoConfirmacao = null;
+    // Depois de desfazer, o foco vai para o botão da linha seguinte (a linha desfeita some).
+    const lista = botoes();
+    const proximo = lista[lista.indexOf(botao) + 1]?.dataset.codigo ?? lista[lista.indexOf(botao) - 1]?.dataset.codigo;
     const r = store.estornar(codigo);
     if (r.ok) registrarAuditoria('Desfez uma movimentação');
     atualizarTudo();
     avisar(r.ok ? 'Movimentação desfeita.' : r.erro);
+    focarDepois(botoes().find((b) => b.dataset.codigo === (r.ok ? proximo : codigo)));
   });
 
   // ---------- eventos gerais ----------
@@ -537,19 +725,21 @@
   $('busca').addEventListener('input', (e) => { filtro.texto = e.target.value.trim(); desenharDespensa(); });
   document.querySelectorAll('input[name="categoria"]').forEach((r) =>
     r.addEventListener('change', (e) => { filtro.categoria = e.target.value; desenharDespensa(); }));
-  $('filtro-historico').addEventListener('change', desenharHistorico);
-  $('filtro-mes').addEventListener('change', desenharHistorico);
+  $('filtro-historico').addEventListener('change', () => { pedindoConfirmacao = null; desenharHistorico(); });
+  $('filtro-mes').addEventListener('change', () => { pedindoConfirmacao = null; desenharHistorico(); });
 
   // ---------- apagar tudo ----------
 
   const CONFIRMACOES = {
     zero: {
-      texto: 'Isso apaga tudo o que está neste aparelho, sem volta. Se houver dados reais, baixe as planilhas antes.',
+      texto: 'Isso apaga o estoque, as doações e o dinheiro deste aparelho, sem volta. As contas continuam. Se houver dados reais, baixe as planilhas antes.',
+      botao: 'Sim, apagar tudo',
       fazer: () => store.apagarTudo(),
       feito: 'Tudo apagado. Registre a primeira doação para cadastrar os itens da casa.',
     },
     exemplo: {
-      texto: 'Isso troca tudo o que está neste aparelho pelos dados de exemplo, sem volta.',
+      texto: 'Isso troca o estoque, as doações e o dinheiro deste aparelho pelos dados de exemplo, sem volta.',
+      botao: 'Sim, trocar pelos exemplos',
       fazer: () => store.restaurarExemplo(),
       feito: 'Dados de exemplo restaurados.',
     },
@@ -562,7 +752,10 @@
     $('confirmar-restaurar').hidden = !chave;
     $('restaurar').hidden = Boolean(chave);
     $('comecar-zero').hidden = Boolean(chave);
-    if (chave) $('confirmar-texto').textContent = CONFIRMACOES[chave].texto;
+    if (chave) {
+      $('confirmar-texto').textContent = CONFIRMACOES[chave].texto;
+      $('restaurar-sim').textContent = CONFIRMACOES[chave].botao;
+    }
     $(chave ? 'restaurar-nao' : 'comecar-zero').focus();
   }
 
@@ -588,6 +781,8 @@
       : dias === 0 ? 'Último backup: hoje.'
         : `Último backup: há ${dias} dia${dias === 1 ? '' : 's'}.`;
     $('backup-quando').textContent = quando;
+    $('cartao-backup-quando').textContent = quando;
+    $('cartao-backup').hidden = !pode('administrar');
 
     const temExemplos = store.temExemplos();
     $('faixa-exemplo').hidden = !temExemplos || !pode('administrar');
@@ -606,6 +801,7 @@
   }
 
   $('backup-baixar').addEventListener('click', fazerBackup);
+  $('cartao-backup-baixar').addEventListener('click', fazerBackup);
   $('faixa-backup-baixar').addEventListener('click', fazerBackup);
   $('backup-restaurar').addEventListener('click', () => $('backup-arquivo').click());
   $('backup-arquivo').addEventListener('change', async (e) => {
@@ -614,19 +810,31 @@
     e.target.value = ''; // permite escolher o mesmo arquivo de novo
     if (!arquivos.length) return;
 
-    // Sem isso, os exemplos ficariam no lugar dos dados reais de mesmo código.
-    const r = await restaurarArquivos(arquivos, () => { if (store.soExemplos()) store.apagarTudo(); });
+    let r;
+    try {
+      // Sem isso, os exemplos ficariam no lugar dos dados reais de mesmo código.
+      r = await restaurarArquivos(arquivos, () => { if (store.soExemplos()) store.apagarTudo(); });
+    } catch (erro) {
+      console.warn(erro);
+      avisar('Não foi possível ler as planilhas. Baixe os arquivos para o aparelho e tente de novo.');
+      return;
+    }
     if (r.ok) registrarAuditoria('Restaurou planilhas');
     atualizarTudo();
 
     const titulo = r.ok ? `${r.importados} registros restaurados, ${r.ignorados} já existiam.` : 'Nada foi restaurado.';
     const problemas = r.erros.slice(0, 3).join(' ');
-    const mais = r.erros.length > 3 ? ` E mais ${r.erros.length - 3} problemas.` : '';
-    avisar(`${titulo} ${problemas}${mais}`.trim());
+    const resto = r.erros.length - 3;
+    const mais = resto > 0 ? ` E mais ${resto} ${resto === 1 ? 'problema' : 'problemas'}.` : '';
+    // A restauração não confere o saldo: se ele ficou negativo, avisa (faltou alguma planilha ou linha).
+    const saldo = store.resumo().saldoCentavos;
+    const alertaSaldo = r.ok && saldo < 0
+      ? ` Atenção: o saldo ficou negativo (${brl.format(saldo / 100)}). Confira se faltou alguma entrada de dinheiro.` : '';
+    avisar(`${titulo} ${problemas}${mais}${alertaSaldo}`.trim());
   });
 
   // Duas abas abertas: quando a outra salva, esta redesenha com o que está gravado.
-  aoMudarEmOutraAba(() => { conferirSessao(); atualizarTudo(); });
+  aoMudarEmOutraAba(() => { if (!conferirSessao()) atualizarTudo(); });
 
   let diaMostrado = null;
 
@@ -707,8 +915,17 @@
     document.querySelectorAll('.lateral nav a[data-pagina]').forEach((a) => {
       if (a.dataset.pagina === pagina) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
     });
-    // No celular o menu rola para o lado: mantém a página aberta à vista.
-    document.querySelector('.lateral nav a[aria-current]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    // Se o menu precisar rolar para o lado, mantém a página aberta à vista. Sem scrollIntoView:
+    // ele mudava o ponto de partida do Tab, e o primeiro Tab pulava "Pular para o conteúdo".
+    const nav = document.querySelector('.lateral nav');
+    const atual = nav.querySelector('a[aria-current]');
+    if (atual && nav.scrollWidth > nav.clientWidth) nav.scrollLeft = atual.offsetLeft - nav.clientWidth / 2 + atual.offsetWidth / 2;
+    // Saiu da página: ações pela metade e a senha de outra pessoa não ficam esperando na tela.
+    if (pedindoConfirmacao) { pedindoConfirmacao = null; desenharHistorico(); }
+    if (rapido) { rapido = null; desenharDespensa(); }
+    if (desativando) { desativando = null; desenharContas(); }
+    $('senha-gerada').hidden = true;
+    $('senha-gerada-valor').textContent = '';
     const titulo = document.querySelector(`.pagina[data-pagina="${pagina}"] h1`);
     document.title = `${pagina === 'inicio' ? 'Visão geral' : titulo.textContent} | Casa Via Matris`;
     if (pagina === 'inicio') desenharGrafico(); // a largura só existe com a página visível
@@ -742,21 +959,28 @@
   function desenharContas() {
     if (!pode('administrar')) return;
     const opcoesPerfil = (atual) => Object.entries(PERFIS).map(([valor, p]) => el('option', { value: valor, selected: valor === atual }, p.rotulo));
+    const eu = (c) => c.codigo === conta.codigo;
     $('lista-contas').replaceChildren(...listarContas().map((c) => el('li', { class: 'conta', 'data-codigo': c.codigo },
       el('div', {},
         el('strong', {}, c.nome),
         el('span', {}, c.email),
         c.bloqueada && el('span', { class: 'etiqueta saida_item' }, 'Bloqueada'),
-        c.provisoria && el('span', { class: 'etiqueta doacao_item' }, 'Senha provisória'),
+        // Pendências em calêndula (atenção); vermelho só para o que impede o uso.
+        c.provisoria && el('span', { class: 'etiqueta pendente' }, 'Senha provisória'),
         !c.ativo && el('span', { class: 'etiqueta saida_item' }, 'Desativada'),
         // Quem aceitou os termos e quando: é a prova do aceite, caso a casa precise mostrar.
         c.termosAceitosEm
           ? el('span', { class: 'conta-termos' }, `Aceitou os termos em ${new Date(c.termosAceitosEm).toLocaleDateString('pt-BR')}`)
-          : el('span', { class: 'etiqueta saida_item' }, 'Termos ainda não aceitos')),
+          : el('span', { class: 'etiqueta pendente' }, 'Termos ainda não aceitos')),
       el('div', { class: 'conta-acoes' },
-        el('label', {}, el('span', { class: 'visualmente-oculto' }, `Perfil de ${c.nome}`), el('select', { 'data-acao': 'perfil' }, opcoesPerfil(c.perfil))),
-        c.codigo !== conta.codigo && el('button', { type: 'button', class: 'botao-fantasma', 'data-acao': 'senha' }, 'Gerar senha'),
-        c.codigo !== conta.codigo && el('button', { type: 'button', class: 'botao-fantasma', 'data-acao': 'ativo' }, c.ativo ? 'Desativar' : 'Ativar')))));
+        // A própria conta não troca de perfil aqui: um toque errado tiraria o seu acesso de administrador.
+        eu(c)
+          ? el('span', { class: 'conta-eu' }, `${PERFIS[c.perfil].rotulo} (você)`)
+          : el('label', {}, el('span', { class: 'visualmente-oculto' }, `Perfil de ${c.nome}`), el('select', { 'data-acao': 'perfil' }, opcoesPerfil(c.perfil))),
+        !eu(c) && el('button', { type: 'button', class: 'botao-fantasma', 'data-acao': 'senha', 'aria-label': `Gerar senha provisória para ${c.nome}` }, 'Gerar senha'),
+        !eu(c) && (c.ativo && desativando === c.codigo
+          ? el('button', { type: 'button', class: 'botao-fantasma perigo', 'data-acao': 'ativo', 'aria-label': `Sim, desativar a conta de ${c.nome}` }, 'Sim, desativar')
+          : el('button', { type: 'button', class: 'botao-fantasma', 'data-acao': 'ativo', 'aria-label': `${c.ativo ? 'Desativar' : 'Ativar'} a conta de ${c.nome}` }, c.ativo ? 'Desativar' : 'Ativar'))))));
     $('lista-auditoria').replaceChildren(...lerAuditoria().slice(0, 50).map((l) => el('li', {},
       el('time', { datetime: l.quando }, new Date(l.quando).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })),
       ` ${[l.quem, l.acao, l.detalhe].filter(Boolean).join(': ')}`)));
@@ -780,10 +1004,30 @@
       el('th', { scope: 'row' }, texto),
       ...perfis.map((p) => el('td', { class: tem(p) ? 'sim' : 'nao' }, tem(p) ? 'Sim' : 'Não')))),
     el('tr', { class: 'matriz-resumo' }, el('th', { scope: 'row' }, 'Resumo'), ...perfis.map((p) => el('td', {}, p.resumo))));
+    // No celular, a tabela de 5 colunas não cabe: cada perfil vira um cartão com o que pode e o que não pode.
+    $('matriz-cartoes').replaceChildren(...perfis.map((p) => el('li', { class: 'perfil-cartao' },
+      el('h3', {}, p.rotulo),
+      el('p', { class: 'painel-ajuda' }, p.resumo),
+      el('ul', { class: 'perfil-lista' }, ...linhas.map(([texto, tem]) => el('li', { class: tem(p) ? 'sim' : 'nao' },
+        el('span', { class: 'visualmente-oculto' }, tem(p) ? 'Pode: ' : 'Não pode: '), texto))))));
   }
 
   $('c-perfil').replaceChildren(...Object.entries(PERFIS).map(([valor, p]) => el('option', { value: valor }, p.rotulo)));
-  $('senha-gerada-fechar').addEventListener('click', () => { $('senha-gerada').hidden = true; });
+  $('senha-gerada-fechar').addEventListener('click', () => {
+    $('senha-gerada').hidden = true;
+    $('senha-gerada-valor').textContent = '';
+    $('t-acessos').focus();
+  });
+
+  // Desativar pede dois toques, como o Desfazer do histórico.
+  let desativando = null;
+  let fimDoDesativar = null;
+
+  // Depois de redesenhar a lista, o foco volta para o mesmo botão da mesma pessoa.
+  function focarNaConta(codigo, acao) {
+    const li = [...$('lista-contas').children].find((l) => l.dataset.codigo === codigo);
+    focarDepois(li?.querySelector(`[data-acao="${acao}"]`));
+  }
 
   // Desliga o botão enquanto a senha é calculada (leva segundos em celular antigo): evita o toque duplo.
   async function comBotaoTravado(botao, tarefa) {
@@ -795,9 +1039,21 @@
     e.preventDefault();
     if (conferirSessao()) return;
     const dados = Object.fromEntries(new FormData(e.target));
-    const r = await comBotaoTravado(e.target.querySelector('button[type=submit]'), () => criarConta(dados));
+    let r;
+    try {
+      r = await comBotaoTravado(e.target.querySelector('button[type=submit]'), () => criarConta(dados));
+    } catch (erro) {
+      console.warn(erro);
+      r = { ok: false, erro: 'Não foi possível concluir. Tente de novo.' };
+    }
     $('erro-conta').textContent = r.ok ? '' : r.erro;
-    if (!r.ok) return;
+    if (!r.ok) {
+      const campo = /nome/i.test(r.erro) ? $('c-nome') : /e-mail/i.test(r.erro) ? $('c-email') : /perfil/i.test(r.erro) ? $('c-perfil') : null;
+      campo?.setAttribute('aria-invalid', 'true');
+      campo?.focus();
+      return;
+    }
+    e.target.querySelectorAll('[aria-invalid]').forEach((c) => c.removeAttribute('aria-invalid'));
     e.target.reset();
     desenharContas();
     mostrarSenhaGerada(dados.nome, r.senhaProvisoria);
@@ -809,14 +1065,38 @@
     const codigo = e.target.closest('.conta').dataset.codigo;
     const pessoa = listarContas().find((c) => c.codigo === codigo);
     if (acao === 'senha') {
-      const r = await comBotaoTravado(e.target.closest('button'), () => redefinirSenhaDe(codigo));
+      let r;
+      try {
+        r = await comBotaoTravado(e.target.closest('button'), () => redefinirSenhaDe(codigo));
+      } catch (erro) {
+        console.warn(erro);
+        r = { ok: false, erro: 'Não foi possível gerar a senha. Tente de novo.' };
+      }
       desenharContas();
-      if (r.ok) mostrarSenhaGerada(pessoa.nome, r.senhaProvisoria); else avisar(r.erro);
+      if (r.ok) mostrarSenhaGerada(pessoa.nome, r.senhaProvisoria); else { avisar(r.erro); focarNaConta(codigo, 'senha'); }
       return;
     }
+    if (pessoa.ativo && desativando !== codigo) {
+      desativando = codigo;
+      desenharContas();
+      focarNaConta(codigo, 'ativo');
+      // Como no Desfazer: a confirmação vale por 10 segundos.
+      clearTimeout(fimDoDesativar);
+      fimDoDesativar = setTimeout(() => {
+        if (desativando !== codigo) return;
+        const comFoco = document.activeElement?.dataset?.acao === 'ativo';
+        desativando = null;
+        desenharContas();
+        if (comFoco) focarNaConta(codigo, 'ativo');
+      }, 10000);
+      return;
+    }
+    desativando = null;
     const r = alterarConta(codigo, { ativo: !pessoa.ativo });
     if (!r.ok) avisar(r.erro);
+    else avisar(`${pessoa.nome}: conta ${pessoa.ativo ? 'desativada' : 'ativada'}.`);
     desenharContas();
+    focarNaConta(codigo, 'ativo');
   });
 
   $('lista-contas').addEventListener('change', (e) => {
@@ -827,6 +1107,7 @@
     // Mudou o próprio perfil: recarrega para o menu e as páginas seguirem o perfil novo.
     if (r.ok && codigo === conta.codigo) { location.reload(); return; }
     desenharContas();
+    focarNaConta(codigo, 'perfil');
   });
 
   // Garante o idioma certo para leitores de tela também quando a página é hospedada dentro de outra estrutura.

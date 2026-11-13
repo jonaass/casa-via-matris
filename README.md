@@ -3,7 +3,12 @@
 Projeto de extensão (ODS 10): sistema de controle de **estoque, doações e finanças**
 da Casa Via Matris. Funciona no navegador, instala no celular como um app e abre sem internet.
 
-## Versão 1.2
+## Versão 1.3
+
+A 1.3.0 veio de uma auditoria completa de design, contraste e bugs, feita pelos agentes do projeto
+(`.claude/agents/`). Entraram o **tema claro automático** (segue o celular), **somar ou dar baixa direto
+no Estoque**, o cartão **"Cópia dos dados"** na Visão geral, a recuperação de acesso em dois caminhos e
+dezenas de correções de contraste, alinhamento e foco do teclado.
 
 Na 1.2.0 entraram os **Termos de uso e o Aviso de privacidade** (`termos.html`), com aceite
 obrigatório e registrado em cada conta. As fontes passaram a ser servidas pelo próprio site, então
@@ -81,6 +86,11 @@ mesmo se eles falharem: confira a aba depois de enviar.
 - **Gráfico de entradas e saídas**: barras por mês, nos últimos 6 meses, só para Financeiro e Administrador.
   Mostra os valores ao passar o dedo, o mouse ou o Tab, e tem a mesma informação em tabela.
   Azul = entrou, laranja = saiu: verde e vermelho se confundem para quem tem daltonismo.
+- **Somar ou dar baixa no item**: no Estoque, "− Saiu" e "+ Chegou" abrem um campo de quantidade no
+  próprio item. Passa pelas mesmas regras do Registrar (não deixa sair mais do que existe). Para informar
+  doador, validade ou motivo, o link leva ao Registrar com o item já escolhido.
+- **Tema claro e escuro**: o app segue a configuração do celular. Todas as cores dos dois temas passam no
+  contraste WCAG AA. A tela de entrada continua noturna nos dois.
 - **Estoque**: cada item tem uma barra de quantidade com um tracinho no estoque mínimo.
   Verde = suficiente, laranja = abaixo do mínimo, vermelho = acabou. Os itens mais
   "apertados" aparecem primeiro. Dá para buscar pelo nome e filtrar por categoria.
@@ -104,7 +114,7 @@ mesmo se eles falharem: confira a aba depois de enviar.
 ```
 index.html          a página (estrutura e textos)
 termos.html         Termos de uso e Aviso de privacidade
-fontes/             as fontes do app e as licenças delas
+fontes/             as fontes do app (Atkinson Hyperlegible e Hanken Grotesk) e as licenças delas
 css/styles.css      o visual (cores, fontes, layout, celular)
 js/utilitarios.js   datas e quantidades no formato brasileiro
 js/dados.js         a única parte que lê e grava no aparelho
@@ -152,6 +162,28 @@ Sugestão para o Anthony, alinhada ao que o grupo usa na faculdade:
 ## Riscos
 
 Encontrados na revisão do protótipo. Os marcados como corrigidos têm teste em `tests/`.
+
+### Corrigidos na 1.3.0
+
+Vieram da auditoria de 13/11/2026 (revisor de design, testador e revisor de acessos).
+
+- O texto de exemplo dos campos tinha contraste 3,7:1 (mínimo 4,5:1). A busca do Estoque não tinha rótulo visível.
+- A Visão geral de Almoxarifado e Voluntário ficava desalinhada (as divisórias contavam o saldo escondido).
+- No celular, a tabela de perfis escondia os quatro perfis. Agora vira um cartão por perfil.
+- Cores com sentido trocado: escolha do tipo em verde até na despesa, pendências em vermelho, reposição em
+  vermelho sem nada ter acabado, saldo negativo em verde.
+- A busca do Estoque não achava "feijao" sem acento, e dava para cadastrar "Feijao carioca" com "Feijão carioca" já existindo.
+- Clique duplo em Registrar mostrava um erro falso. O aviso não fechava depois de sair dele com o teclado.
+- O foco do teclado ia para o começo da página depois de desfazer, desativar conta ou trocar perfil.
+- O "Confirmar" do Desfazer ficava armado para sempre, e o "Desativar" conta agia no primeiro toque.
+- O administrador bloqueado não conseguia usar o código de recuperação.
+- Sair numa aba não encerrava a sessão nas outras abas.
+- Restaurar e baixar planilhas só era barrado pela tela; agora a regra confere se é administrador.
+- Registro incompleto no aparelho deixava a tela de entrada em branco.
+- O campo de validade saía do cartão em celulares estreitos (360 px ou menos).
+- Item vencido aparecia como "vence em até 15 dias", sem dizer que já venceu.
+- O app podia ser aberto dentro de outro site (risco de cliques induzidos).
+- A senha provisória de outra pessoa ficava na tela ao trocar de página.
 
 ### Corrigidos na 1.2.0
 

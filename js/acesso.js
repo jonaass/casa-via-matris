@@ -145,7 +145,10 @@
   function abrirSessao(conta, manter) {
     sair(false);
     const onde = manter ? espaco('localStorage') : (espaco('sessionStorage') ?? espaco('localStorage'));
-    onde.setItem(CHAVE_SESSAO, JSON.stringify({ contaCodigo: conta.codigo, expiraEm: Date.now() + (manter ? SESSAO_LONGA_MS : SESSAO_CURTA_MS) }));
+    onde.setItem(CHAVE_SESSAO, JSON.stringify({
+      // Sempre depois do último "Sair", mesmo no mesmo milissegundo: senão ela já nasceria encerrada.
+      contaCodigo: conta.codigo, criadaEm: Math.max(Date.now(), (lerConfig().saidaEm ?? 0) + 1), expiraEm: Date.now() + (manter ? SESSAO_LONGA_MS : SESSAO_CURTA_MS),
+    }));
   }
 
   /** A conta da sessão aberta, ou null. Sessão vencida, conta desativada, provisória ou sem o aceite dos termos não contam. */
@@ -155,7 +158,10 @@
       try { sessao = JSON.parse(espaco.getItem(CHAVE_SESSAO)); } catch (e) { /* tratada como sessão inexistente */ }
       if (!sessao) continue;
       const conta = contas().find((c) => c.codigo === sessao.contaCodigo);
-      if (conta && conta.ativo && !conta.provisoria && aceitouOsTermos(conta) && sessao.expiraEm > Date.now()) return publica(conta);
+      // Sessão aberta antes do último "Sair" deste aparelho (outra aba, por exemplo) não vale mais.
+      const saidaEm = lerConfig().saidaEm;
+      const depoisDaSaida = !saidaEm || (sessao.criadaEm ?? 0) > saidaEm;
+      if (conta && conta.ativo && !conta.provisoria && aceitouOsTermos(conta) && depoisDaSaida && sessao.expiraEm > Date.now()) return publica(conta);
       espaco.removeItem(CHAVE_SESSAO);
     }
     return null;
@@ -190,9 +196,11 @@
     return podeVerPagina(nome) ? { pagina: nome } : { pagina: 'sem-permissao', pedida: nome };
   }
 
+  /** Sair encerra a sessão em todas as abas deste aparelho, não só nesta. */
   function sair(registrar = true) {
     if (registrar && contaAtual()) registrarAuditoria('Saiu do sistema');
     sessaoGuardada().forEach((espaco) => espaco.removeItem(CHAVE_SESSAO));
+    if (registrar) salvarConfig({ saidaEm: Date.now() });
   }
 
   /** Primeira abertura neste aparelho: quem chega primeiro cria o administrador. */
@@ -229,7 +237,9 @@
   }
 
   const minutosRestantes = (ate) => Math.max(1, Math.ceil((ate - Date.now()) / 60000));
-  const erroDeBloqueio = (ate) => `Conta bloqueada por muitas tentativas. Tente de novo em ${minutosRestantes(ate)} min ou peça ajuda ao administrador.`;
+  // O administrador não tem a quem pedir ajuda: para ele, a saída é o código de recuperação.
+  const erroDeBloqueio = (ate, conta) => `Conta bloqueada por muitas tentativas. Tente de novo em ${minutosRestantes(ate)} min ` +
+    (conta?.perfil === 'administrador' ? 'ou use o código de recuperação em "Esqueci a senha".' : 'ou peça ajuda ao administrador.');
 
   // Confere a senha na ordem do FigJam. Quem chama decide o que fazer depois.
   async function validar(email, senha) {
@@ -240,9 +250,9 @@
       registrarAuditoria('Tentativa de entrada recusada');
       return falha(ERRO_LOGIN);
     }
-    if ((conta.bloqueadoAte ?? 0) > Date.now()) return falha(erroDeBloqueio(conta.bloqueadoAte));
+    if ((conta.bloqueadoAte ?? 0) > Date.now()) return falha(erroDeBloqueio(conta.bloqueadoAte, conta));
     if (!(await confere(String(senha ?? ''), conta.senha))) {
-      return contarErro(conta) ? falha(erroDeBloqueio(Date.now() + BLOQUEIO_MS)) : falha(ERRO_LOGIN);
+      return contarErro(conta) ? falha(erroDeBloqueio(Date.now() + BLOQUEIO_MS, conta)) : falha(ERRO_LOGIN);
     }
     if (!conta.ativo) return falha('Esta conta foi desativada. Fale com o administrador.');
     return { ok: true, conta };
@@ -307,11 +317,17 @@
     if (erro) return falha(erro);
     const conta = contas().find((c) => c.email === normalizar(email) && c.perfil === 'administrador' && c.ativo);
     const guardado = lerConfig().recuperacao;
-    const codigo = String(codigoInformado ?? '').trim().toUpperCase();
-    if (conta && (conta.bloqueadoAte ?? 0) > Date.now()) return falha(erroDeBloqueio(conta.bloqueadoAte));
+    // Aceita o código colado com espaços ou sem os hífens.
+    const limpo = String(codigoInformado ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    const codigo = limpo.length === 16 ? limpo.match(/.{4}/g).join('-') : limpo;
+    // O código certo libera até uma conta bloqueada: é a saída do administrador que esqueceu a senha.
+    // Já o código errado, com a conta bloqueada, não conta mais erro: só avisa do bloqueio.
     const certo = guardado && await confere(codigo, guardado);
     const ERRO = 'E-mail ou código de recuperação incorretos.';
-    if (!conta || !certo) return conta && contarErro(conta) ? falha(erroDeBloqueio(Date.now() + BLOQUEIO_MS)) : falha(ERRO);
+    if (!conta || !certo) {
+      if (conta && (conta.bloqueadoAte ?? 0) > Date.now()) return falha(erroDeBloqueio(conta.bloqueadoAte, conta));
+      return conta && contarErro(conta) ? falha(erroDeBloqueio(Date.now() + BLOQUEIO_MS, conta)) : falha(ERRO);
+    }
 
     const codigoRecuperacao = gerarCodigoRecuperacao();
     const lista = contas();
@@ -404,14 +420,17 @@
    * número de itens em falta: nunca dinheiro, nem quem doou ou observações.
    */
   function recadosDaCasa() {
-    const itens = new Map(lerTudo('itens').map((i) => [i.codigo, i]));
+    // Registro incompleto (editado à mão ou estragado) não pode travar a tela de entrada.
+    const itens = new Map(lerTudo('itens')
+      .filter((i) => typeof i.nome === 'string' && Number.isFinite(i.quantidade) && Number.isFinite(i.minimo))
+      .map((i) => [i.codigo, i]));
     const quando = (data) => {
       const dias = -diasAte(data);
       return dias === 0 ? 'Hoje' : dias === 1 ? 'Ontem' : dataCurta(data);
     };
     const nomeNaFrase = (nome) => nome.charAt(0).toLocaleLowerCase('pt-BR') + nome.slice(1);
     const recados = lerTudo('doacoes')
-      .filter((m) => m.tipo === 'doacao_item' && itens.has(m.itemId))
+      .filter((m) => m.tipo === 'doacao_item' && typeof m.data === 'string' && Number.isFinite(m.quantidade) && itens.has(m.itemId))
       .reverse() // no mesmo instante, a gravada por último vem primeiro
       .sort((a, b) => b.data.localeCompare(a.data) || String(b.criadoEm).localeCompare(String(a.criadoEm)))
       .slice(0, 2)
