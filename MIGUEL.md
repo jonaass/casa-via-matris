@@ -111,6 +111,11 @@ O mês vai sempre de **1 a 12** (nunca 0 a 11, como no `Date` do JavaScript).
 - O registro do `sw.js` fica no `login.js`, e não num `<script>` no HTML: a CSP do projeto bloqueia script inline. Ele roda antes do login, para a tela de acesso abrir sem internet.
 - O `store.js` não tem mais armazenamento próprio: lê e grava pelo `dados.js`. É ele que fornece `textoParaCentavos`, `centavosParaTexto` e `gerarCodigo`.
 - O backup fica no menu **Conta**, só para o administrador.
+- `baixarPlanilha`, `importarPlanilha` e `restaurarArquivos` também recusam na regra quem não é administrador
+  (resposta com `erros: ['Só o administrador...']`), não só na tela.
+- No **modo servidor** (1.4.0, `js/servidor.js`), os dados vêm do banco: `importarPlanilha` e `restaurarArquivos`
+  recusam (o próximo login apagaria o que fosse gravado só no aparelho). Baixar continua funcionando. Para levar
+  planilhas ao banco, use `python -m backend.importar` (veja `backend/README.md`).
 
 ## Publicação no GitHub Pages
 
