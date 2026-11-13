@@ -731,7 +731,7 @@ form {
 .linha {
   display: grid;
   /* min(): numa tela de 320 px, 120 px por coluna estouraria o cartão. */
-  grid-template-columns: repeat(auto-fit, minmax(min(140px, 100%), 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(170px, 100%), 1fr));
   gap: 12px;
 }
 
@@ -745,6 +745,10 @@ form {
 
 [hidden] {
   display: none !important;
+}
+
+input[type='date'] {
+  min-width: 0; /* o campo de data tem largura mínima própria e estourava a coluna */
 }
 
 input,
@@ -2043,6 +2047,8 @@ input[type='date'],
 .item-acoes {
   display: flex;
   justify-content: flex-end;
+  align-items: center;
+  align-self: center;
   gap: 8px;
 }
 

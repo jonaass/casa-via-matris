@@ -319,6 +319,7 @@
     const botao = e.target.closest('button[data-rapido]');
     if (!botao || conferirSessao()) return;
     const acao = botao.dataset.rapido;
+    if (!rapido && (acao === 'cancelar' || acao === 'detalhes')) { desenharDespensa(); return; }
     if (acao === 'cancelar') {
       const codigo = rapido.codigo;
       rapido = null;
@@ -327,8 +328,11 @@
       return;
     }
     if (acao === 'detalhes') {
-      abrirRegistrarCom(rapido.tipo, rapido.codigo, botao.closest('form').elements.quantidade.value);
+      const { tipo, codigo } = rapido;
+      const quantidade = botao.closest('form').elements.quantidade.value;
       rapido = null;
+      desenharDespensa(); // fecha o mini-formulário antes de sair da página
+      abrirRegistrarCom(tipo, codigo, quantidade);
       return;
     }
     rapido = { codigo: botao.dataset.codigo, tipo: acao };
@@ -359,6 +363,7 @@
 
   $('lista-itens').addEventListener('keydown', (e) => {
     if (e.key !== 'Escape' || !rapido) return;
+    e.preventDefault();
     const codigo = rapido.codigo;
     rapido = null;
     desenharDespensa();
@@ -476,11 +481,15 @@
 
   // Depois de gravar, o formulário fica limpo: um segundo toque logo em seguida mostraria um erro
   // falso ("Informe uma quantidade"), e a pessoa poderia achar que falhou e lançar de novo.
+  // Só ignora esse toque duplo: se a pessoa já digitou algo novo, o lançamento segue normalmente.
   let gravouEm = 0;
+  let mexeuDepois = true;
+  form.addEventListener('input', () => { mexeuDepois = true; });
+  form.addEventListener('change', () => { mexeuDepois = true; });
 
   form.addEventListener('submit', (evento) => {
     evento.preventDefault();
-    if (Date.now() - gravouEm < 1500) return;
+    if (!mexeuDepois && Date.now() - gravouEm < 1500) return;
     // Sessão vencida com a página aberta: volta para a entrada, em vez de dizer "seu perfil não pode".
     if (conferirSessao()) return;
     atualizarData(); // o dia pode ter virado com a tela aberta
@@ -513,6 +522,7 @@
     }
 
     gravouEm = Date.now();
+    mexeuDepois = false;
     const mov = resultado.movimento;
     const item = mov.itemId ? store.item(mov.itemId) : null;
     const detalhe = item
@@ -913,7 +923,7 @@
     // Saiu da página: ações pela metade e a senha de outra pessoa não ficam esperando na tela.
     if (pedindoConfirmacao) { pedindoConfirmacao = null; desenharHistorico(); }
     if (rapido) { rapido = null; desenharDespensa(); }
-    desativando = null;
+    if (desativando) { desativando = null; desenharContas(); }
     $('senha-gerada').hidden = true;
     $('senha-gerada-valor').textContent = '';
     const titulo = document.querySelector(`.pagina[data-pagina="${pagina}"] h1`);
@@ -1011,6 +1021,7 @@
 
   // Desativar pede dois toques, como o Desfazer do histórico.
   let desativando = null;
+  let fimDoDesativar = null;
 
   // Depois de redesenhar a lista, o foco volta para o mesmo botão da mesma pessoa.
   function focarNaConta(codigo, acao) {
@@ -1069,6 +1080,15 @@
       desativando = codigo;
       desenharContas();
       focarNaConta(codigo, 'ativo');
+      // Como no Desfazer: a confirmação vale por 10 segundos.
+      clearTimeout(fimDoDesativar);
+      fimDoDesativar = setTimeout(() => {
+        if (desativando !== codigo) return;
+        const comFoco = document.activeElement?.dataset?.acao === 'ativo';
+        desativando = null;
+        desenharContas();
+        if (comFoco) focarNaConta(codigo, 'ativo');
+      }, 10000);
       return;
     }
     desativando = null;
