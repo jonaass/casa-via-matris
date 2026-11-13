@@ -5,6 +5,7 @@ se os dois continuam iguais: mudou lá, tem que mudar aqui.
 """
 import hashlib
 import hmac
+import re
 import secrets
 import sqlite3
 import time
@@ -30,6 +31,14 @@ BLOQUEIO_S = 15 * 60
 SESSAO_S = 8 * 60 * 60
 
 ERRO_LOGIN = "E-mail ou senha incorretos."
+EMAIL_VALIDO = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")  # a mesma regra do acesso.js
+
+
+def chave_do_nome(nome: str) -> str:
+    """Igual ao semAcento do store.js: sem acento, minúsculas e espaços únicos.
+    "Feijão  Carioca" e "feijao carioca" são o mesmo item."""
+    sem = "".join(c for c in unicodedata.normalize("NFD", str(nome or "")) if not unicodedata.combining(c))
+    return " ".join(sem.lower().split())
 SAL_FALSO = "00" * 16
 
 
@@ -67,7 +76,7 @@ def criar_usuario(con: sqlite3.Connection, nome: str, email: str, perfil: str, s
     email = normalizar_email(email)
     if not nome:
         raise ValueError("Informe o nome da pessoa.")
-    if "@" not in email or len(email) > 120:
+    if not EMAIL_VALIDO.match(email) or len(email) > 120:
         raise ValueError("Informe um e-mail válido, como nome@exemplo.com.")
     if perfil not in PERFIS:
         raise ValueError(f"Escolha um perfil: {', '.join(PERFIS)}.")
@@ -94,29 +103,40 @@ def _erro_de_bloqueio(ate: float) -> str:
             "ou peça ajuda ao administrador.")
 
 
-def validar_login(con: sqlite3.Connection, email: str, senha: str) -> tuple[sqlite3.Row | None, str | None]:
-    """Confere e-mail e senha na ordem do acesso.js. Devolve (usuário, None) ou (None, mensagem de erro)."""
+def validar_login(con: sqlite3.Connection, email: str, senha: str,
+                  revelar_bloqueio: bool = False) -> tuple[sqlite3.Row | None, str | None]:
+    """Confere e-mail e senha. Devolve (usuário, None) ou (None, mensagem de erro).
+
+    Para quem está de fora (a tela de entrada), toda recusa responde igual e leva o mesmo tempo:
+    e-mail que não existe, senha errada, conta bloqueada e conta desativada. Assim ninguém descobre
+    pela internet quais e-mails têm conta, nem confirma uma senha certa de conta desativada.
+    revelar_bloqueio: para quem já está logado (trocar a senha), avisa que a conta bloqueou.
+    """
     senha = str(senha or "")
     usuario = con.execute("SELECT * FROM usuarios WHERE email = ?", (normalizar_email(email),)).fetchone()
     if usuario is None:
-        # Gasta o mesmo tempo de uma conta real, para não revelar quais e-mails existem.
-        derivar(senha, SAL_FALSO, ITERACOES)
+        derivar(senha, SAL_FALSO, ITERACOES)  # o mesmo tempo de uma conta real
         return None, ERRO_LOGIN
     if usuario["bloqueado_ate"] > time.time():
-        return None, _erro_de_bloqueio(usuario["bloqueado_ate"])
+        derivar(senha, SAL_FALSO, ITERACOES)
+        return None, _erro_de_bloqueio(usuario["bloqueado_ate"]) if revelar_bloqueio else ERRO_LOGIN
     certo = derivar(senha, usuario["senha_sal"], usuario["senha_iteracoes"])
     if not hmac.compare_digest(certo, usuario["senha_hash"]):
-        tentativas = usuario["tentativas"] + 1
         with con:
+            # Soma no próprio banco: vários pedidos ao mesmo tempo não podem "perder" erros
+            # (lendo e gravando em Python, 15 senhas erradas em paralelo não bloqueavam a conta).
+            tentativas = con.execute(
+                "UPDATE usuarios SET tentativas = tentativas + 1 WHERE codigo = ? RETURNING tentativas",
+                (usuario["codigo"],)).fetchone()[0]
             if tentativas >= MAX_ERROS:
                 ate = time.time() + BLOQUEIO_S
                 con.execute("UPDATE usuarios SET tentativas = 0, bloqueado_ate = ? WHERE codigo = ?",
                             (ate, usuario["codigo"]))
-                return None, _erro_de_bloqueio(ate)
-            con.execute("UPDATE usuarios SET tentativas = ? WHERE codigo = ?", (tentativas, usuario["codigo"]))
+                if revelar_bloqueio:
+                    return None, _erro_de_bloqueio(ate)
         return None, ERRO_LOGIN
     if not usuario["ativo"]:
-        return None, "Esta conta foi desativada. Fale com o administrador."
+        return None, ERRO_LOGIN
     with con:
         con.execute("UPDATE usuarios SET tentativas = 0, bloqueado_ate = 0 WHERE codigo = ?", (usuario["codigo"],))
     return usuario, None
@@ -131,7 +151,7 @@ def trocar_senha(con: sqlite3.Connection, email: str, atual: str, nova: str,
         return erro
     if nova == atual:
         return "A senha nova precisa ser diferente da atual."
-    usuario, erro = validar_login(con, email, atual)
+    usuario, erro = validar_login(con, email, atual, revelar_bloqueio=True)
     if erro:
         return erro
     g = nova_senha_guardada(nova, iteracoes)

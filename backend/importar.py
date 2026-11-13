@@ -20,6 +20,7 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 
 from . import banco, config
+from .seguranca import chave_do_nome
 
 MAX_QUANTIDADE_MILESIMOS = 1_000_000_000 * 1000
 
@@ -74,8 +75,10 @@ def _data(valor: str, ate_hoje: bool = False) -> str | None:
     try:
         if m:
             d = date(int(m[3]), int(m[2]), int(m[1]))
-        else:
+        elif re.fullmatch(r"\d{4}-\d{2}-\d{2}", valor):
             d = date.fromisoformat(valor)
+        else:
+            raise ValueError(valor)  # fromisoformat sozinho aceitaria "2026W011" (semana do ano)
     except ValueError:
         raise LinhaRuim(f'Data inválida ("{valor}"), use DD/MM/AAAA.') from None
     if ate_hoje and d > datetime.now(config.FUSO).date():
@@ -111,15 +114,16 @@ def ler_planilha(texto: str) -> tuple[str, list[dict]]:
     primeira = texto.splitlines()[0] if texto.strip() else ""
     separador = ";" if primeira.count(";") >= primeira.count(",") else ","
     leitor = csv.reader(io.StringIO(texto), delimiter=separador)
-    linhas = [l for l in leitor if any(c.strip() for c in l)]
+    # Guarda o número real de cada linha: as em branco são puladas, mas o erro aponta a linha certa.
+    linhas = [(n, l) for n, l in enumerate(leitor, start=1) if any(c.strip() for c in l)]
     if not linhas:
         raise ValueError("A planilha está vazia.")
-    cabecalho = [_sem_acento(c) for c in linhas[0]]
+    cabecalho = [_sem_acento(c) for c in linhas[0][1]]
     colecao = next((c for c in ORDEM if MARCA[c] in cabecalho), None)
     if colecao is None:
         raise ValueError("Não reconheci esta planilha. Use as planilhas baixadas pelo botão Fazer backup.")
     campos = [COLUNAS[colecao].get(c) for c in cabecalho]
-    registros = [{campo: valor for campo, valor in zip(campos, linha) if campo} for linha in linhas[1:]]
+    registros = [{"_linha": n, **{campo: valor for campo, valor in zip(campos, linha) if campo}} for n, linha in linhas[1:]]
     return colecao, registros
 
 
@@ -129,6 +133,12 @@ def _agora() -> str:
 
 def _codigo(r: dict) -> str:
     return _texto(r.get("codigo", ""), 40) or secrets.token_hex(6)
+
+
+def _existe(con, tabela: str, codigo: str) -> bool:
+    # Registro com código que já está no banco: importar duas vezes não duplica. (O INSERT OR IGNORE
+    # que havia antes também engolia linhas recusadas pelo banco, que viravam "já existia".)
+    return con.execute(f"SELECT 1 FROM {tabela} WHERE codigo = ?", (codigo,)).fetchone() is not None
 
 
 def _importar_item(con, r):
@@ -141,15 +151,20 @@ def _importar_item(con, r):
     unidade = _texto(r.get("unidade"), 10)
     if not unidade:
         raise LinhaRuim("falta a unidade")
-    if not r.get("codigo") and con.execute("SELECT 1 FROM itens WHERE lower(nome) = lower(?)", (nome,)).fetchone():
-        return False  # item sem código com nome que já existe: ignorado, para não duplicar
-    cur = con.execute(
-        "INSERT OR IGNORE INTO itens (codigo, nome, categoria, unidade, quantidade_milesimos, minimo_milesimos, validade)"
-        " VALUES (?, ?, ?, ?, ?, ?, ?)",
-        (_codigo(r), nome, categoria, unidade, _quantidade(r.get("quantidade"), True),
+    codigo = _codigo(r)
+    if _existe(con, "itens", codigo):
+        return False
+    if con.execute("SELECT 1 FROM itens WHERE nome_chave = ?", (chave_do_nome(nome),)).fetchone():
+        if not r.get("codigo"):
+            return False  # item sem código com nome que já existe: ignorado, para não duplicar
+        raise LinhaRuim(f'já existe um item chamado "{nome}" (sem contar acentos e maiúsculas)')
+    con.execute(
+        "INSERT INTO itens (codigo, nome, nome_chave, categoria, unidade, quantidade_milesimos, minimo_milesimos, validade)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        (codigo, nome, chave_do_nome(nome), categoria, unidade, _quantidade(r.get("quantidade"), True),
          _quantidade(r.get("minimo") or "0", True), _data(r.get("validade"))),
     )
-    return cur.rowcount == 1
+    return True
 
 
 def _importar_doacao(con, r):
@@ -160,21 +175,24 @@ def _importar_doacao(con, r):
     if not tipo:
         raise LinhaRuim("Movimento precisa ser Doação ou Saída")
     item_codigo = _texto(r.get("itemId"), 40)
-    if item_codigo:
-        achado = con.execute("SELECT codigo FROM itens WHERE codigo = ?", (item_codigo,)).fetchone()
-    else:
-        achado = con.execute("SELECT codigo FROM itens WHERE lower(nome) = lower(?)",
-                             (_texto(r.get("nomeDoItem"), 60),)).fetchone()
+    achado = con.execute("SELECT codigo FROM itens WHERE codigo = ?", (item_codigo,)).fetchone() if item_codigo else None
+    if not achado and _texto(r.get("nomeDoItem"), 60):
+        # Como o ligarAoItem do backup.js: código desconhecido, procura pelo nome (sem acento).
+        achado = con.execute("SELECT codigo FROM itens WHERE nome_chave = ?",
+                             (chave_do_nome(_texto(r.get("nomeDoItem"), 60)),)).fetchone()
     if not achado:
         raise LinhaRuim("o item não existe no estoque (importe a planilha do estoque primeiro)")
     pessoa = _texto(r.get("pessoa"), 80) or (DOADOR_ANONIMO if tipo == "doacao_item" else "")
-    cur = con.execute(
-        "INSERT OR IGNORE INTO doacoes (codigo, tipo, data, item_codigo, quantidade_milesimos, descricao, pessoa, criado_em)"
+    codigo = _codigo(r)
+    if _existe(con, "doacoes", codigo):
+        return False
+    con.execute(
+        "INSERT INTO doacoes (codigo, tipo, data, item_codigo, quantidade_milesimos, descricao, pessoa, criado_em)"
         " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-        (_codigo(r), tipo, data, achado["codigo"], _quantidade(r.get("quantidade")),
+        (codigo, tipo, data, achado["codigo"], _quantidade(r.get("quantidade")),
          _texto(r.get("descricao"), 120), pessoa, _agora()),
     )
-    return cur.rowcount == 1
+    return True
 
 
 def _importar_dinheiro(con, r):
@@ -185,18 +203,23 @@ def _importar_dinheiro(con, r):
     if not tipo:
         raise LinhaRuim("Movimento precisa ser Entrada ou Despesa")
     centavos = _numero_br(r.get("valor"), 2)
-    if centavos <= 0 or centavos > 2**53:
+    if centavos <= 0:
         raise LinhaRuim("o valor precisa ser maior que zero")
+    if centavos > 2**53:
+        raise LinhaRuim("esse valor parece errado")
     descricao = _texto(r.get("descricao"), 120)
     if not descricao:
         raise LinhaRuim("falta a descrição")
     pessoa = _texto(r.get("pessoa"), 80) or (DOADOR_ANONIMO if tipo == "entrada_dinheiro" else "")
-    cur = con.execute(
-        "INSERT OR IGNORE INTO dinheiro (codigo, tipo, data, valor_centavos, descricao, pessoa, criado_em)"
+    codigo = _codigo(r)
+    if _existe(con, "dinheiro", codigo):
+        return False
+    con.execute(
+        "INSERT INTO dinheiro (codigo, tipo, data, valor_centavos, descricao, pessoa, criado_em)"
         " VALUES (?, ?, ?, ?, ?, ?, ?)",
-        (_codigo(r), tipo, data, centavos, descricao, pessoa, _agora()),
+        (codigo, tipo, data, centavos, descricao, pessoa, _agora()),
     )
-    return cur.rowcount == 1
+    return True
 
 
 IMPORTADORES = {"itens": _importar_item, "doacoes": _importar_doacao, "dinheiro": _importar_dinheiro}
@@ -207,7 +230,8 @@ def importar_texto(con: sqlite3.Connection, texto: str) -> dict:
     colecao, registros = ler_planilha(texto)
     resultado = {"colecao": colecao, "importados": 0, "ignorados": 0, "erros": []}
     with con:  # a planilha entra numa transação só
-        for numero, r in enumerate(registros, start=2):  # linha 1 é o cabeçalho
+        for r in registros:
+            numero = r["_linha"]
             try:
                 entrou = IMPORTADORES[colecao](con, r)
             except (LinhaRuim, sqlite3.IntegrityError) as e:
@@ -246,6 +270,11 @@ def main(argumentos: list[str]) -> int:
         return 1
     finally:
         con.close()
+    saldo = banco.abrir_banco().execute(
+        "SELECT COALESCE(SUM(CASE tipo WHEN 'entrada_dinheiro' THEN valor_centavos ELSE -valor_centavos END), 0)"
+        " FROM dinheiro").fetchone()[0]
+    if saldo < 0:
+        print(f"Atenção: o saldo ficou negativo (R$ {saldo / 100:.2f}). Falta alguma planilha de entradas?")
     print(f"Banco: {config.caminho_do_banco()}")
     return 0
 

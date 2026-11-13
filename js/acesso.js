@@ -58,7 +58,7 @@
    * Versão dos Termos de uso e do Aviso de privacidade (termos.html). Ao mudar o texto dos
    * termos, mude esta data: todo mundo precisa aceitar de novo na próxima entrada.
    */
-  const TERMOS_VERSAO = '2026-11-12';
+  const TERMOS_VERSAO = '2026-11-13';
 
   const ITERACOES = 600000; // PBKDF2-SHA256, número recomendado pela OWASP
   const SENHA_MINIMA = 8;
@@ -423,6 +423,8 @@
    * número de itens em falta: nunca dinheiro, nem quem doou ou observações.
    */
   function recadosDaCasa() {
+    // Com os dados vindo do banco, nada da cópia aparece antes do login.
+    if (typeof modoServidor === 'function' && modoServidor()) return [{ titulo: 'Recados da casa', texto: 'Os dados da casa aparecem depois de entrar.' }];
     // Registro incompleto (editado à mão ou estragado) não pode travar a tela de entrada.
     const itens = new Map(lerTudo('itens')
       .filter((i) => typeof i.nome === 'string' && Number.isFinite(i.quantidade) && Number.isFinite(i.minimo))

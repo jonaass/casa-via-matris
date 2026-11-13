@@ -83,8 +83,20 @@ def test_senha_errada_e_email_inexistente_dao_a_mesma_resposta(cliente):
 def test_cinco_erros_bloqueiam_a_conta(cliente):
     for _ in range(seguranca.MAX_ERROS):
         r = entrar(cliente, "voluntario", "senha-errada-000")
-    assert "bloqueada" in r.json()["erro"]
+    # Para quem está de fora a resposta é a mesma de sempre (não revela que o e-mail existe)...
+    assert r.json() == {"erro": seguranca.ERRO_LOGIN}
     assert entrar(cliente, "voluntario").status_code == 401  # nem com a senha certa, até passar o tempo
+    # ...mas a conta ficou bloqueada no banco.
+    assert con_bloqueado(cliente)
+
+
+def con_bloqueado(_):
+    import time
+    c = banco.conectar()
+    try:
+        return c.execute("SELECT bloqueado_ate FROM usuarios WHERE email = 'voluntario@teste.com'").fetchone()[0] > time.time()
+    finally:
+        c.close()
 
 
 def test_login_de_outro_site_e_recusado(cliente):
@@ -228,3 +240,128 @@ def test_perfis_iguais_ao_acesso_js():
 def test_head_na_pagina_inicial_para_monitoramento(cliente):
     r = cliente.head("/")
     assert r.status_code == 200 and r.headers["content-type"].startswith("text/html")
+
+
+# ---------- achados da revisão (versão 1.4.0) ----------
+
+def test_senhas_erradas_em_paralelo_bloqueiam_a_conta(con):
+    from concurrent.futures import ThreadPoolExecutor
+
+    def errar(_):
+        c = banco.conectar()
+        try:
+            return seguranca.validar_login(c, "voluntario@teste.com", "senha-errada-000")
+        finally:
+            c.close()
+
+    with ThreadPoolExecutor(8) as ex:
+        list(ex.map(errar, range(15)))
+    assert con_bloqueado(None)
+
+
+def test_migracao_simultanea_nao_falha(tmp_path):
+    from concurrent.futures import ThreadPoolExecutor
+    caminho = tmp_path / "novo.db"
+
+    def abrir(_):
+        c = banco.abrir_banco(caminho)
+        c.close()
+        return True
+
+    with ThreadPoolExecutor(8) as ex:
+        assert all(ex.map(abrir, range(16)))
+
+
+def test_conta_bloqueada_e_email_inexistente_dao_a_mesma_resposta(cliente):
+    for _ in range(seguranca.MAX_ERROS + 1):
+        a = entrar(cliente, "voluntario", "senha-errada-000")
+    b = cliente.post("/api/entrar", json={"email": "ninguem@teste.com", "senha": "x" * 10}, headers=ORIGEM)
+    assert a.json() == b.json()
+
+
+def test_conta_desativada_nao_revela_senha_certa(cliente, con):
+    with con:
+        con.execute("UPDATE usuarios SET ativo = 0 WHERE email = 'voluntario@teste.com'")
+    certa, errada = entrar(cliente, "voluntario"), entrar(cliente, "voluntario", "senha-errada-000")
+    assert certa.status_code == errada.status_code == 401
+    assert certa.json() == errada.json()
+
+
+def test_limite_por_ip_responde_429_e_nao_guarda_ip_sem_erro(cliente):
+    from backend import principal
+    assert entrar(cliente, "administrador").status_code == 200
+    assert principal._erros_por_ip == {}  # login certo não fica guardado
+    for i in range(principal.LIMITE_POR_IP):
+        cliente.post("/api/entrar", json={"email": f"x{i}@teste.com", "senha": "x" * 10}, headers=ORIGEM)
+    assert entrar(cliente, "administrador").status_code == 429
+
+
+def test_nome_repetido_sem_acento_e_recusado(con):
+    texto = "Código;Item;Categoria;Unidade;Quantidade em estoque;Estoque mínimo\nzz1;Feijão  Carioca;Alimentos;kg;1;0\nzz2;feijao carioca;Alimentos;kg;1;0\n"
+    r = importar.importar_texto(con, texto)
+    assert r["importados"] == 1 and len(r["erros"]) == 1
+    with pytest.raises(Exception):
+        with con:
+            con.execute("INSERT INTO itens (codigo, nome, nome_chave, categoria, unidade) VALUES ('zz3', 'FEIJÃO carioca', ?, 'Alimentos', 'kg')",
+                        (seguranca.chave_do_nome("FEIJÃO carioca"),))
+
+
+def test_movimento_sem_validade_anterior_nao_manda_a_chave(cliente):
+    entrar(cliente, "administrador")
+    assert all("validadeAnterior" not in m or m["validadeAnterior"] for m in cliente.get("/api/doacoes").json())
+
+
+def test_docs_desligado_por_padrao(cliente):
+    for rota in ("/docs", "/redoc", "/openapi.json"):
+        assert cliente.get(rota).status_code == 404
+
+
+def test_origin_com_esquema_errado_ou_host_forjado_e_recusado(cliente):
+    corpo = {"email": "administrador@teste.com", "senha": SENHA}
+    assert cliente.post("/api/entrar", json=corpo, headers={"Origin": "https://testserver"}).status_code == 403
+    r = cliente.post("/api/entrar", json=corpo, headers={"Origin": "http://evil.example", "Host": "evil.example"})
+    assert r.status_code == 200  # sem VM_ORIGENS vale o próprio endereço...
+
+
+def test_lista_de_origens_do_env(cliente, monkeypatch):
+    monkeypatch.setenv("VM_ORIGENS", "https://casa.example")
+    corpo = {"email": "administrador@teste.com", "senha": SENHA}
+    r = cliente.post("/api/entrar", json=corpo, headers={"Origin": "http://evil.example", "Host": "evil.example"})
+    assert r.status_code == 403  # ...e com a lista, só ela
+    assert cliente.post("/api/entrar", json=corpo, headers={"Origin": "https://casa.example"}).status_code == 200
+
+
+@pytest.mark.parametrize("caminho", ["/js/%2e%2e/CLAUDE.md", "/css/../CLAUDE.md", "/tests/", "/README.md",
+                                     "/backend/.env.example", "/MIGUEL.md", "/js/"])
+def test_caminhos_internos_nao_saem(cliente, caminho):
+    assert cliente.get(caminho).status_code == 404
+
+
+def test_data_em_formato_de_semana_e_recusada():
+    with pytest.raises(importar.LinhaRuim):
+        importar._data("2026W011")
+
+
+def test_erro_aponta_a_linha_certa_com_linhas_em_branco(con):
+    texto = "Código;Data;Movimento;Valor (R$);Descrição;Quem\n\n\nq1;01/01/2026;Entrada;abc;Teste;\n"
+    assert importar.importar_texto(con, texto)["erros"][0].startswith("Linha 4:")
+
+
+def test_doacao_acha_item_pelo_nome_quando_o_codigo_nao_existe(con):
+    nome = con.execute("SELECT nome FROM itens LIMIT 1").fetchone()[0]
+    texto = f"Código;Data;Movimento;Código do item;Item;Quantidade\nn1;01/01/2026;Doação;nao-existe;{nome.upper()};1\n"
+    assert importar.importar_texto(con, texto)["importados"] == 1
+
+
+def test_rota_existente_com_metodo_errado_responde_405(cliente):
+    assert cliente.post("/api/itens", headers=ORIGEM).status_code == 405
+
+
+def test_erro_interno_responde_no_formato_de_erro(con, monkeypatch):
+    from backend import principal
+    monkeypatch.setattr(principal, "saude", None)
+    def quebrar(*_a, **_k):
+        raise RuntimeError("falha de teste")
+    monkeypatch.setattr(seguranca, "usuario_da_sessao", quebrar)
+    r = TestClient(app, raise_server_exceptions=False).get("/api/eu", cookies={"vm_sessao": "x"})
+    assert r.status_code == 500 and "erro" in r.json()

@@ -23,7 +23,10 @@ def _ler_arquivo_env() -> None:
         if not linha or linha.startswith("#") or "=" not in linha:
             continue
         nome, valor = linha.split("=", 1)
-        os.environ.setdefault(nome.strip(), valor.strip())
+        valor = valor.strip()
+        if len(valor) >= 2 and valor[0] == valor[-1] and valor[0] in "\"'":
+            valor = valor[1:-1]  # NOME="valor" ou NOME='valor'
+        os.environ.setdefault(nome.strip(), valor)
 
 
 _ler_arquivo_env()

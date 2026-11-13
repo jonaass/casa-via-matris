@@ -161,10 +161,12 @@
           <button type="button" class="botao" id="backup-baixar">Baixar planilhas</button>
           <button type="button" class="botao-fantasma" id="backup-restaurar">Restaurar de planilhas</button>
           <input type="file" id="backup-arquivo" accept=".csv,text/csv" multiple hidden>
-          <p>Os dados ficam só neste aparelho. Não coloque nomes de pessoas acolhidas nem documentos.</p>
+          <p id="backup-onde">Os dados ficam só neste aparelho. Não coloque nomes de pessoas acolhidas nem documentos.</p>
+          <div id="area-apagar-dados">
           <h2 class="opcoes-titulo perigo-titulo">Apagar dados</h2>
           <button type="button" class="botao-fantasma botao-perigoso" id="comecar-zero">Começar do zero</button>
           <button type="button" class="botao-fantasma botao-perigoso" id="restaurar">Trocar pelos dados de exemplo</button>
+          </div>
           <!-- Confirmação dentro da página: diálogos confirm() são bloqueados em alguns lugares onde o site fica hospedado. -->
           <div class="confirmar" id="confirmar-restaurar" hidden>
             <p id="confirmar-texto"></p>

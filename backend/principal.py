@@ -11,26 +11,43 @@ do app (connect-src 'self') só deixa o site conversar com o próprio endereço.
 Nesta primeira etapa a API só LÊ o banco. Gravar (registrar, estornar) é o próximo passo,
 repetindo as regras do js/store.js.
 """
+import os
 import sqlite3
 import time
-from collections import defaultdict, deque
-from urllib.parse import urlparse
+from collections import deque
+from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from . import banco, config, seguranca
 
 COOKIE = "vm_sessao"
 
+@asynccontextmanager
+async def _ao_ligar(_: FastAPI):
+    # As migrações rodam uma vez, quando o servidor liga. Rodando a cada pedido, vários pedidos juntos
+    # num banco novo tentavam criar as mesmas tabelas e davam erro 500.
+    con = banco.abrir_banco()
+    con.close()
+    yield
+
+
+# A página /docs (e o /openapi.json) carrega scripts de uma CDN e mostra o mapa da API: fica desligada,
+# a não ser para quem está desenvolvendo (VM_DOCS=1 no backend/.env).
+_DOCS = os.environ.get("VM_DOCS") == "1"
 app = FastAPI(
     title="Casa Via Matris",
     description="API de estoque, doações e finanças. Os nomes dos campos são os mesmos do js/dados.js.",
-    version="0.1.0",
+    version="0.2.0",
+    lifespan=_ao_ligar,
+    docs_url="/docs" if _DOCS else None,
+    redoc_url=None,
+    openapi_url="/openapi.json" if _DOCS else None,
 )
 
 # ---------- erros no formato { "erro": "...", "campo": "..." } ----------
@@ -50,6 +67,13 @@ async def _erro_http(_: Request, exc: StarletteHTTPException):
     if getattr(exc, "campo", None):
         corpo["campo"] = exc.campo
     return JSONResponse(corpo, status_code=exc.status_code)
+
+
+@app.exception_handler(Exception)
+async def _erro_inesperado(_: Request, exc: Exception):
+    # Erro que ninguém previu: responde no mesmo formato, sem mostrar detalhes internos a quem pediu.
+    print(f"Erro inesperado: {type(exc).__name__}: {exc}")
+    return JSONResponse({"erro": "Algo deu errado no servidor. Tente de novo em instantes."}, status_code=500)
 
 
 @app.exception_handler(RequestValidationError)
@@ -88,7 +112,7 @@ async def _cabecalhos(request: Request, chamar_proximo):
 
 
 def obter_banco():
-    con = banco.abrir_banco()
+    con = banco.conectar()
     try:
         yield con
     finally:
@@ -111,23 +135,61 @@ def exigir(acao: str):
     return conferir
 
 
+def _origens_aceitas(request: Request) -> set[str]:
+    """Endereços de onde o site pode mandar pedidos que gravam. Publicado, liste-os em VM_ORIGENS
+    (ex.: https://casaviamatris.org.br). Sem a lista, vale o próprio endereço, com http/https certo."""
+    lista = os.environ.get("VM_ORIGENS", "")
+    if lista.strip():
+        return {o.strip().rstrip("/") for o in lista.split(",") if o.strip()}
+    return {f"{request.url.scheme}://{request.headers.get('host', '')}"}
+
+
 def conferir_origem(request: Request) -> None:
     """Contra CSRF: rota que grava só aceita pedido feito pelo próprio site."""
-    origem = request.headers.get("origin")
-    if not origem or urlparse(origem).netloc != request.headers.get("host"):
+    if request.headers.get("origin") not in _origens_aceitas(request):
         raise ErroDaApi(403, "Pedido vindo de outro site foi recusado.")
 
 
 # Limite de tentativas de login por IP (além do bloqueio por conta): 20 erros em 15 minutos.
-_erros_por_ip: dict[str, deque] = defaultdict(deque)
+# Só IPs com erro recente ficam guardados, para a memória não crescer sem fim.
+# Atrás de um proxy, rode o uvicorn com --proxy-headers --forwarded-allow-ips=<IP do proxy>:
+# sem isso, todos aparecem com o IP do proxy (ou qualquer um troca o IP pelo X-Forwarded-For).
+_erros_por_ip: dict[str, deque] = {}
 LIMITE_POR_IP = 20
 
 
-def _muitos_erros(ip: str) -> bool:
-    fila = _erros_por_ip[ip]
+def _limpar_fila(ip: str) -> deque | None:
+    fila = _erros_por_ip.get(ip)
+    if fila is None:
+        return None
     while fila and fila[0] < time.time() - seguranca.BLOQUEIO_S:
         fila.popleft()
-    return len(fila) >= LIMITE_POR_IP
+    if not fila:
+        del _erros_por_ip[ip]
+        return None
+    return fila
+
+
+def _reservar_tentativa(ip: str) -> bool:
+    """Anota a tentativa ANTES de conferir a senha (pedidos em paralelo não passam do limite).
+    Devolve False se o IP já chegou ao limite."""
+    if len(_erros_por_ip) > 10_000:  # faxina de vez em quando
+        for antigo in list(_erros_por_ip):
+            _limpar_fila(antigo)
+    fila = _limpar_fila(ip)
+    if fila is not None and len(fila) >= LIMITE_POR_IP:
+        return False
+    _erros_por_ip.setdefault(ip, deque()).append(time.time())
+    return True
+
+
+def _devolver_tentativa(ip: str) -> None:
+    """Login certo não conta como erro."""
+    fila = _erros_por_ip.get(ip)
+    if fila:
+        fila.pop()
+        if not fila:
+            del _erros_por_ip[ip]
 
 
 # ---------- rotas da API ----------
@@ -140,8 +202,9 @@ def saude():
 
 
 class Login(BaseModel):
-    email: str
-    senha: str
+    # Tamanho máximo: cada senha custa 600 mil cálculos, e texto gigante não serve para nada.
+    email: str = Field(max_length=120)
+    senha: str = Field(max_length=seguranca.SENHA_MAXIMA)
 
 
 def _conta_publica(u: sqlite3.Row) -> dict:
@@ -151,12 +214,12 @@ def _conta_publica(u: sqlite3.Row) -> dict:
 @app.post("/api/entrar", tags=["conta"], dependencies=[Depends(conferir_origem)])
 def entrar(dados: Login, request: Request, response: Response, con: sqlite3.Connection = Depends(obter_banco)):
     ip = request.client.host if request.client else "?"
-    if _muitos_erros(ip):
+    if not _reservar_tentativa(ip):
         raise ErroDaApi(429, "Muitas tentativas seguidas. Espere alguns minutos e tente de novo.")
     usuario, erro = seguranca.validar_login(con, dados.email, dados.senha)
     if erro:
-        _erros_por_ip[ip].append(time.time())
         raise ErroDaApi(401, erro)
+    _devolver_tentativa(ip)
     token = seguranca.abrir_sessao(con, usuario["codigo"])
     response.set_cookie(COOKIE, token, max_age=seguranca.SESSAO_S, httponly=True,
                         secure=config.cookie_seguro(request.url.scheme == "https"), samesite="strict", path="/")
@@ -171,8 +234,8 @@ def sair(request: Request, response: Response, con: sqlite3.Connection = Depends
 
 
 class TrocaDeSenha(BaseModel):
-    senhaAtual: str
-    novaSenha: str
+    senhaAtual: str = Field(max_length=seguranca.SENHA_MAXIMA)
+    novaSenha: str = Field(max_length=1000)  # acima de 128 a regra responde com a explicação
 
 
 @app.post("/api/trocar-senha", tags=["conta"], dependencies=[Depends(conferir_origem)])
@@ -216,8 +279,12 @@ def listar_doacoes(_: sqlite3.Row = Depends(exigir("ver_estoque")), con: sqlite3
         mov = {
             "codigo": m["codigo"], "tipo": m["tipo"], "data": m["data"], "itemId": m["item_codigo"],
             "quantidade": _quantidade(m["quantidade_milesimos"]), "descricao": m["descricao"],
-            "pessoa": m["pessoa"], "criadoEm": m["criado_em"], "validadeAnterior": m["validade_anterior"],
+            "pessoa": m["pessoa"], "criadoEm": m["criado_em"],
         }
+        # Só manda a chave quando há valor: o store.js testa 'validadeAnterior' in mov, e um null
+        # apagaria a validade do item ao desfazer.
+        if m["validade_anterior"] is not None:
+            mov["validadeAnterior"] = m["validade_anterior"]
         if m["criou_item"]:
             mov["criouItem"] = True
         lista.append(mov)
@@ -234,7 +301,10 @@ def listar_dinheiro(_: sqlite3.Row = Depends(exigir("ver_financeiro")), con: sql
 
 
 @app.api_route("/api/{resto:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"], include_in_schema=False)
-def rota_inexistente(resto: str):
+def rota_inexistente(resto: str, request: Request):
+    # Rota que existe, mas com o método errado (ex.: POST /api/itens): 405, não 404.
+    if any(getattr(r, "path", None) == f"/api/{resto}" for r in app.routes if r is not request.scope.get("route")):
+        raise ErroDaApi(405, "Método não permitido.")
     raise ErroDaApi(404, "Essa rota da API não existe.")
 
 

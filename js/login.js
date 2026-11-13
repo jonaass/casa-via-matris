@@ -125,7 +125,8 @@
    * credenciais: e-mail e senha que a pessoa acabou de digitar, para entrar também no servidor.
    */
   async function abrirApp(credenciais = null) {
-    const puxado = await puxarDoServidor(credenciais);
+    const atual = contaAtual();
+    const puxado = await puxarDoServidor(credenciais, (credenciais && credenciais.email) || (atual && atual.email));
     if (!puxado.ok) {
       // O servidor manda: se ele recusou, não abre o painel com dados velhos.
       sair(false);
@@ -312,6 +313,8 @@
     abrirApp();
     return;
   }
+  // Ninguém logado: a cópia dos dados do banco (se houver) não fica no aparelho para a próxima pessoa.
+  if (typeof sairDoServidor === 'function') sairDoServidor();
   try { desenharRecados(); } catch (e) { console.warn(e); } // recados nunca podem impedir a entrada
   $('tela-acesso').hidden = false;
   let guarda = false;

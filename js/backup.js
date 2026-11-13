@@ -175,6 +175,9 @@
    */
   const SO_ADMIN = 'Só o administrador pode baixar ou restaurar planilhas.';
   const negado = () => typeof globalThis.pode === 'function' && !globalThis.pode('administrar');
+  // Restaurar no modo servidor gravaria só no aparelho, e o próximo login apagaria tudo sem aviso.
+  const SO_LEITURA = 'Os dados agora vêm do banco da casa: restaurar planilhas por aqui não está disponível.';
+  const modoServidorLigado = () => typeof globalThis.modoServidor === 'function' && globalThis.modoServidor();
 
   async function baixarPlanilha(colecao) {
     if (negado()) return { ok: false, erros: [SO_ADMIN] };
@@ -315,6 +318,7 @@
     const colunas = colunasDe(colecao);
     const resultado = { ok: false, importados: 0, ignorados: 0, erros: [] };
     if (negado()) { resultado.erros.push(SO_ADMIN); return resultado; }
+    if (modoServidorLigado()) { resultado.erros.push(SO_LEITURA); return resultado; }
 
     const linhas = lerCsv(texto);
     if (linhas.length === 0) {
@@ -425,6 +429,7 @@
   async function restaurarArquivos(arquivos, antesDeGravar) {
     const resultado = { ok: false, importados: 0, ignorados: 0, erros: [] };
     if (negado()) { resultado.erros.push(SO_ADMIN); return resultado; }
+    if (modoServidorLigado()) { resultado.erros.push(SO_LEITURA); return resultado; }
     const planilhas = [];
     for (const arquivo of arquivos) {
       if (arquivo.size > TAMANHO_MAXIMO_ARQUIVO) {

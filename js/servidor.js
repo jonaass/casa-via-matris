@@ -62,8 +62,10 @@
     return ACOES_QUE_GRAVAM.includes(acao) || !Array.isArray(pode) || !pode.includes(acao);
   }
 
-  const MSG_SENHA_DIFERENTE = 'O servidor não aceitou esta senha. A senha precisa ser a mesma no aparelho e no servidor: ' +
-    'peça a quem cuida do sistema para conferir (python -m backend.usuarios senha).';
+  // O servidor responde igual para senha errada, conta bloqueada ou desativada (não revela nada a quem é de fora).
+  const MSG_SENHA_DIFERENTE = 'O servidor da casa não aceitou esta entrada. A senha precisa ser a mesma no aparelho e no servidor, ' +
+    'e a conta do servidor pode estar bloqueada por tentativas erradas (espere 15 minutos) ou desativada. ' +
+    'Se continuar, peça a quem cuida do sistema para conferir (python -m backend.usuarios senha).';
 
   async function entrarNoServidor(email, senha) {
     const r = await pedir('api/entrar', { method: 'POST', body: JSON.stringify({ email, senha }) });
@@ -78,7 +80,9 @@
    * Devolve { ok: true } ou { ok: false, erro }.
    */
   async function trocarSenhaNoServidor(atual, nova) {
-    if (!modoServidor() || !(await temServidor())) return { ok: true };
+    if (!modoServidor()) return { ok: true };
+    // Sem resposta do servidor, trocar só no aparelho deixaria as duas senhas diferentes.
+    if (!(await temServidor())) return falha('Não foi possível falar com o servidor da casa. A senha não foi trocada; tente de novo quando houver conexão.');
     try {
       const r = await pedir('api/trocar-senha', { method: 'POST', body: JSON.stringify({ senhaAtual: atual, novaSenha: nova }) });
       if (r.status === 200) return { ok: true };
@@ -108,8 +112,17 @@
    * Devolve { ok: true, servidor: false } quando não há servidor (nada muda),
    * { ok: true, servidor: true } quando puxou, ou { ok: false, servidor: true, erro }.
    */
-  async function puxarDoServidor(credenciais = null) {
-    if (!(await temServidor())) return { ok: true, servidor: false };
+  async function puxarDoServidor(credenciais = null, email = '') {
+    email = String(email || (credenciais && credenciais.email) || '').trim().toLowerCase();
+    if (!(await temServidor())) {
+      if (!modoServidor()) return { ok: true, servidor: false };
+      // Sem servidor, só abre com a cópia guardada se ela for desta mesma pessoa: nunca com os
+      // dados (e o perfil do servidor) de quem usou o aparelho antes.
+      const s = lerConfig().servidor;
+      if (s.dono && s.dono === email && Array.isArray(s.pode) && s.pode.length) return { ok: true, servidor: false };
+      limparCopia();
+      return falha('Não foi possível falar com o servidor da casa. Confira a internet e tente de novo.');
+    }
     try {
       if (credenciais) {
         const entrou = await entrarNoServidor(credenciais.email, credenciais.senha);
@@ -122,6 +135,12 @@
       const eu = await pedir('api/eu');
       if (eu.status === 401) return falha('Entre de novo para atualizar os dados do banco.');
       if (eu.status !== 200 || !eu.corpo || !Array.isArray(eu.corpo.pode)) return falha('O servidor não respondeu como esperado. Tente de novo.');
+      // A sessão do servidor (cookie) vale para o navegador todo: se outra pessoa entrou em outra aba,
+      // ela é de outra conta. Nunca grava aqui os dados de outra pessoa.
+      if (email && String(eu.corpo.email || '').toLowerCase() !== email) {
+        limparCopia();
+        return falha('O servidor está com a sessão de outra conta (talvez em outra aba). Entre de novo.');
+      }
 
       // Busca tudo antes de gravar: ou entram as três coleções, ou nenhuma muda.
       const novas = {};
@@ -137,7 +156,7 @@
         if (!gravado.ok) return falha(gravado.erros[0]);
       }
       // "iniciado" impede o store.js de colocar os dados de exemplo por cima do banco vazio.
-      salvarConfig({ iniciado: true, servidor: { ativo: true, perfil: eu.corpo.perfil, pode: eu.corpo.pode, atualizadoEm: new Date().toISOString() } });
+      salvarConfig({ iniciado: true, servidor: { ativo: true, dono: String(eu.corpo.email || '').toLowerCase(), perfil: eu.corpo.perfil, pode: eu.corpo.pode, atualizadoEm: new Date().toISOString() } });
       return { ok: true, servidor: true };
     } catch (e) {
       console.warn('Não foi possível puxar os dados do banco.', e);
@@ -150,14 +169,26 @@
    * que usar o aparelho não fica com os dados de quem saiu (ela recebe os dela ao entrar).
    * keepalive: o pedido termina mesmo com a página recarregando logo depois.
    */
-  function sairDoServidor() {
+  /** Apaga do aparelho a cópia dos dados do banco (sem falar com o servidor). */
+  function limparCopia() {
     if (!modoServidor()) return;
     Object.keys(COLECOES).forEach((colecao) => substituirColecao(colecao, []));
-    salvarConfig({ servidor: { ...lerConfig().servidor, pode: [] } });
+    salvarConfig({ servidor: { ...lerConfig().servidor, dono: '', pode: [] } });
+  }
+
+  /** A cópia guardada no aparelho é de outra pessoa (ou de ninguém)? */
+  function copiaDeOutraPessoa(email) {
+    if (!modoServidor()) return false;
+    return lerConfig().servidor.dono !== String(email || '').trim().toLowerCase();
+  }
+
+  function sairDoServidor() {
+    if (!modoServidor()) return;
+    limparCopia();
     try {
       fetch('api/sair', { method: 'POST', credentials: 'same-origin', keepalive: true, headers: { 'Content-Type': 'application/json' } }).catch(() => { });
     } catch (e) { /* sem servidor: nada a fazer */ }
   }
 
-  Object.assign(globalThis, { modoServidor, bloqueadoPeloServidor, puxarDoServidor, sairDoServidor, trocarSenhaNoServidor });
+  Object.assign(globalThis, { modoServidor, limparCopia, copiaDeOutraPessoa, bloqueadoPeloServidor, puxarDoServidor, sairDoServidor, trocarSenhaNoServidor });
 })();

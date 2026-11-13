@@ -15,8 +15,15 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-      - run: node --test tests/store.test.js tests/acesso.test.js
+      - run: node --test tests/store.test.js tests/acesso.test.js tests/servidor.test.js
       - run: node tests/testar-miguel.js
+
+      # Back-end em Python (pasta backend/).
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r backend/requirements.txt
+      - run: python -m pytest backend/tests -q
 
       # Sem mudar a VERSAO, os celulares continuam com os arquivos antigos.
       - name: Confere a VERSAO

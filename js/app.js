@@ -782,10 +782,18 @@
         : `Último backup: há ${dias} dia${dias === 1 ? '' : 's'}.`;
     $('backup-quando').textContent = quando;
     $('cartao-backup-quando').textContent = quando;
-    $('cartao-backup').hidden = !pode('administrar');
+    // Com os dados vindo do banco (servidor.js), a cópia do aparelho é só leitura e a principal fica no
+    // servidor: nada de restaurar, apagar ou trocar por exemplos por aqui.
+    const servidor = modoServidor();
+    $('cartao-backup').hidden = !pode('administrar') || servidor;
+    $('backup-restaurar').hidden = servidor;
+    $('area-apagar-dados').hidden = servidor;
+    $('backup-onde').textContent = servidor
+      ? 'Os dados vêm do banco da casa; as planilhas são uma cópia do que este perfil vê. Não coloque nomes de pessoas acolhidas nem documentos.'
+      : 'Os dados ficam só neste aparelho. Não coloque nomes de pessoas acolhidas nem documentos.';
 
     const temExemplos = store.temExemplos();
-    $('faixa-exemplo').hidden = !temExemplos || !pode('administrar');
+    $('faixa-exemplo').hidden = !temExemplos || !pode('administrar') || servidor;
     // Exemplos não precisam de backup; dados reais sim, mesmo misturados a eles, e são a única cópia.
     const atrasado = !store.soExemplos() && store.movimentos().length > 0 && (dias === null || dias > DIAS_ENTRE_BACKUPS);
     // Com os dados vindo do banco, a cópia principal fica no servidor: o aviso não se aplica.
@@ -869,7 +877,8 @@
   function conferirSessao() {
     const atual = contaAtual();
     // Outra aba pode ter trocado o perfil: recarrega para o menu e as páginas seguirem o perfil novo.
-    if (atual?.codigo === conta?.codigo && atual?.perfil === conta?.perfil) return false;
+    // E a cópia do banco precisa ser desta pessoa (outra aba pode ter entrado com outra conta).
+    if (atual?.codigo === conta?.codigo && atual?.perfil === conta?.perfil && !copiaDeOutraPessoa(atual.email)) return false;
     location.reload();
     return true;
   }
