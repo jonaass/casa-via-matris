@@ -369,3 +369,27 @@ test('a leitura guardada em memória acompanha o que outra aba gravou', () => {
   copia[0].nome = 'mudado';
   assert.equal(lerTudo('itens')[0].nome, 'Feijão', 'mexer na cópia não muda o guardado');
 });
+
+test('item novo com o mesmo nome sem acento é recusado', () => {
+  const s = criarStore();
+  const r = s.registrar({ tipo: 'doacao_item', quantidade: 1, novoItem: { nome: '  feijao   CARIOCA ', categoria: 'Alimentos', unidade: 'kg', minimo: '1' } });
+  assert.equal(r.ok, false);
+  assert.match(r.erro, /Feijão carioca/);
+});
+
+test('estoque mínimo com letras dá a mensagem certa', () => {
+  const s = criarStore();
+  const novo = (minimo) => s.registrar({ tipo: 'doacao_item', quantidade: 1, novoItem: { nome: 'Item X', categoria: 'Limpeza', unidade: 'un', minimo } });
+  assert.match(novo('abc').erro, /só com números/);
+  assert.match(novo('1,2345').erro, /só com números/);
+});
+
+test('resumo separa os itens já vencidos', () => {
+  const s = criarStore();
+  s.registrar({ tipo: 'doacao_item', quantidade: 1, novoItem: { nome: 'Biscoito', categoria: 'Alimentos', unidade: 'pct', minimo: '0' }, validade: emDias(3) });
+  const item = s.itens().find((i) => i.nome === 'Biscoito');
+  substituirColecao('itens', s.itens().map((i) => (i.codigo === item.codigo ? { ...i, validade: emDias(-2) } : i)));
+  const r = s.resumo();
+  assert.ok(r.vencidos.some((i) => i.nome === 'Biscoito'));
+  assert.ok(r.vencendo.some((i) => i.nome === 'Biscoito'));
+});

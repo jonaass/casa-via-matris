@@ -464,3 +464,46 @@ test('nenhum caminho abre a sessão sem o aceite, e as ações ficam com o nome 
     assert.equal(acoes.find((l) => l.acao === acao).quem, 'Ana', acao);
   }
 });
+
+// ---------- correções da auditoria de 13/11 ----------
+
+test('administrador bloqueado se libera com o código de recuperação', async () => {
+  const { codigoRecuperacao } = await criarAdministrador(ADMIN);
+  sair();
+  for (let i = 0; i < 5; i++) await entrar(ADMIN.email, 'errada-0000');
+  const bloqueio = await entrar(ADMIN.email, ADMIN.senha);
+  assert.match(bloqueio.erro, /código de recuperação/);
+  // código errado com a conta bloqueada não piora nada; o certo libera
+  assert.match((await recuperarSenha(ADMIN.email, 'ERRADO', 'senha-nova-1')).erro, /bloqueada/);
+  const r = await recuperarSenha(ADMIN.email, `  ${codigoRecuperacao.toLowerCase().replace(/-/g, ' ')} `, 'senha-nova-1');
+  assert.equal(r.ok, true);
+  sair();
+  assert.equal((await entrar(ADMIN.email, 'senha-nova-1')).ok, true);
+});
+
+test('sair encerra também a sessão de outra aba', async () => {
+  await criarAdministrador(ADMIN);
+  const outraAba = sessionStorage.getItem('via-matris:sessao');
+  assert.ok(contaAtual());
+  sair();
+  sessionStorage.setItem('via-matris:sessao', outraAba); // a cópia que a outra aba guardava
+  assert.equal(contaAtual(), null);
+  assert.equal((await entrar(ADMIN.email, ADMIN.senha)).ok, true); // entrar de novo continua funcionando
+  assert.ok(contaAtual());
+});
+
+test('só o administrador baixa ou restaura planilhas', async () => {
+  await entrarComo('voluntario');
+  const texto = 'Data;Movimento;Valor (R$);Descrição\n01/11/2026;Entrada;999999,00;x';
+  const r = await restaurarArquivos([{ name: 'a.csv', size: texto.length, text: async () => texto, arrayBuffer: async () => new TextEncoder().encode(texto).buffer }]);
+  assert.equal(r.ok, false);
+  assert.match(r.erros[0], /administrador/);
+  assert.equal(importarPlanilha('dinheiro', texto).ok, false);
+  assert.equal((await baixarPlanilha('dinheiro')).ok, false);
+});
+
+test('recados da entrada ignoram registro incompleto em vez de travar', async () => {
+  localStorage.setItem('via-matris:itens', JSON.stringify([{ codigo: 'x' }]));
+  localStorage.setItem('via-matris:doacoes', JSON.stringify([{ codigo: 'd', tipo: 'doacao_item', itemId: 'x', quantidade: 1 }]));
+  assert.doesNotThrow(() => recadosDaCasa());
+});

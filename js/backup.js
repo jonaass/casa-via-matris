@@ -168,7 +168,16 @@
    * Devolve uma Promise: { ok: true, nomeDoArquivo } ou { ok: false, erros: [...] }.
    *   const r = await baixarPlanilha('dinheiro');
    */
+  /*
+   * Baixar e restaurar planilhas é só do administrador: elas juntam estoque e dinheiro.
+   * A tela já esconde os botões, mas a regra vale aqui também. O typeof deixa os testes
+   * deste arquivo rodarem sem o acesso.js.
+   */
+  const SO_ADMIN = 'Só o administrador pode baixar ou restaurar planilhas.';
+  const negado = () => typeof globalThis.pode === 'function' && !globalThis.pode('administrar');
+
   async function baixarPlanilha(colecao) {
+    if (negado()) return { ok: false, erros: [SO_ADMIN] };
     colunasDe(colecao);
     const nomeDoArquivo = `via-matris-${NOMES[colecao]}-${dataDeHoje()}.csv`;
     try {
@@ -305,6 +314,7 @@
   function importarPlanilha(colecao, texto) {
     const colunas = colunasDe(colecao);
     const resultado = { ok: false, importados: 0, ignorados: 0, erros: [] };
+    if (negado()) { resultado.erros.push(SO_ADMIN); return resultado; }
 
     const linhas = lerCsv(texto);
     if (linhas.length === 0) {
@@ -414,6 +424,7 @@
    */
   async function restaurarArquivos(arquivos, antesDeGravar) {
     const resultado = { ok: false, importados: 0, ignorados: 0, erros: [] };
+    if (negado()) { resultado.erros.push(SO_ADMIN); return resultado; }
     const planilhas = [];
     for (const arquivo of arquivos) {
       if (arquivo.size > TAMANHO_MAXIMO_ARQUIVO) {

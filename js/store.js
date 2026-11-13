@@ -39,6 +39,11 @@
   }
 
   // Corta espaços e limita o tamanho de textos livres vindos do formulário.
+  // Para comparar nomes: sem acento, sem maiúsculas e sem espaços sobrando ("Feijão" = "feijao").
+  function semAcento(valor) {
+    return String(valor ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR').trim().replace(/\s+/g, ' ');
+  }
+
   function texto(valor, max) {
     return String(valor ?? '').trim().replace(/\s+/g, ' ').slice(0, max);
   }
@@ -195,8 +200,9 @@
         if (!nome) return falha('Dê um nome ao item novo.');
         if (!unidade) return falha('Informe a unidade do item novo (kg, L, un, pct).');
         if (!CATEGORIAS.includes(entrada.novoItem.categoria)) return falha('Escolha a categoria do item novo.');
-        if (!Number.isFinite(minimo) || minimo < 0) return falha('O estoque mínimo não pode ser negativo.');
-        const igual = itensValidos().find((i) => i.nome.toLocaleLowerCase('pt-BR') === nome.toLocaleLowerCase('pt-BR'));
+        if (!Number.isFinite(minimo)) return falha('Informe o estoque mínimo só com números, como 5 ou 2,5.');
+        if (minimo < 0) return falha('O estoque mínimo não pode ser negativo.');
+        const igual = itensValidos().find((i) => semAcento(i.nome) === semAcento(nome));
         if (igual) return falha(`"${igual.nome}" já está cadastrado. Escolha-o na lista.`);
         item = { codigo: gerarCodigo(), nome, categoria: entrada.novoItem.categoria, unidade, quantidade: 0, minimo, validade: null };
         novoItem = true;
@@ -345,7 +351,9 @@
         doacoesItens,
         doacoesDinheiro,
         abaixoDoMinimo: itens.filter((i) => i.quantidade <= i.minimo),
+        // Vencidos e perto de vencer juntos (os dois pedem ação), mas a tela diz quais já venceram.
         vencendo: itens.filter((i) => i.validade && i.quantidade > 0 && diasAte(i.validade) <= DIAS_ALERTA_VALIDADE),
+        vencidos: itens.filter((i) => i.validade && i.quantidade > 0 && diasAte(i.validade) < 0),
       };
     }
 
@@ -401,7 +409,7 @@
   // Usados também pelo backup.js.
   Object.assign(raiz, { gerarCodigo, textoParaCentavos, centavosParaTexto, QUANTIDADE_MAXIMA });
 
-  const api = { criarStore, TIPOS, CATEGORIAS, DIAS_ALERTA_VALIDADE, DOADOR_ANONIMO, quantidadeDeTexto };
+  const api = { criarStore, TIPOS, CATEGORIAS, DIAS_ALERTA_VALIDADE, DOADOR_ANONIMO, quantidadeDeTexto, semAcento };
   raiz.ViaMatris = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);
