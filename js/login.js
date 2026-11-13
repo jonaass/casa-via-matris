@@ -110,7 +110,23 @@
     $('a-guardei').focus();
   }
 
-  function abrirApp() {
+  /*
+   * Antes de abrir o painel, traz os dados do banco quando o site roda pelo servidor (servidor.js).
+   * Sem servidor (GitHub Pages, arquivo local, sem internet), segue direto com os dados do aparelho.
+   * credenciais: e-mail e senha que a pessoa acabou de digitar, para entrar também no servidor.
+   */
+  async function abrirApp(credenciais = null) {
+    const puxado = await puxarDoServidor(credenciais);
+    if (!puxado.ok) {
+      // O servidor manda: se ele recusou, não abre o painel com dados velhos.
+      sair(false);
+      document.querySelector('.app').hidden = true;
+      $('tela-acesso').hidden = false;
+      desenharRecados();
+      irPara('entrar');
+      mostrarErro(puxado.erro);
+      return;
+    }
     const tela = $('tela-acesso');
     const fim = () => {
       tela.hidden = true;
@@ -142,7 +158,7 @@
     if (modo === 'primeiro') {
       const r = await criarAdministrador({ nome: v.nome, email: v.email, senha: v.nova, aceitouTermos: aceitou });
       if (!r.ok) return mostrarErro(r.erro);
-      return mostrarCodigo(r.codigoRecuperacao, abrirApp);
+      return mostrarCodigo(r.codigoRecuperacao, () => abrirApp({ email: v.email, senha: v.nova }));
     }
     if (modo === 'entrar') {
       const manter = Boolean(v.manter);
@@ -152,19 +168,22 @@
         provisoria = { email: v.email, senha: v.senha, manter };
         return irPara(r.trocarSenha ? 'provisoria' : 'termos');
       }
-      return abrirApp();
+      return abrirApp({ email: v.email, senha: v.senha });
     }
     if (modo === 'provisoria') {
       const r = await trocarSenha(provisoria.email, provisoria.senha, v.nova, provisoria.manter, aceitou);
       if (!r.ok) return mostrarErro(r.erro);
+      // No servidor, entra com a provisória e troca lá também, para as duas senhas continuarem iguais.
+      const credenciais = { email: provisoria.email, senha: provisoria.senha, novaSenha: v.nova };
       provisoria = null;
-      return abrirApp();
+      return abrirApp(credenciais);
     }
     if (modo === 'termos') {
       const r = await aceitarTermos(provisoria.email, provisoria.senha, provisoria.manter, aceitou);
       if (!r.ok) return mostrarErro(r.erro);
+      const credenciais = { email: provisoria.email, senha: provisoria.senha };
       provisoria = null;
-      return abrirApp();
+      return abrirApp(credenciais);
     }
     if (modo === 'esqueci') {
       const r = await recuperarSenha(v.email, v.codigo, v.nova);
@@ -173,7 +192,7 @@
       const email = v.email;
       const senha = v.nova;
       return mostrarCodigo(r.codigoRecuperacao, () => {
-        if (contaAtual()) return abrirApp();
+        if (contaAtual()) return abrirApp({ email, senha });
         provisoria = { email, senha, manter: false };
         return irPara('termos');
       });
@@ -185,8 +204,16 @@
       if (!r.ok) { $('a-senha').value = ''; return mostrarErro(r.erro); }
       return mostrarCodigo(r.codigoRecuperacao, () => voltarAoApp('Código de recuperação trocado.'));
     }
-    const r = await trocarSenha(contaAtual().email, v.senha, v.nova);
+    const email = contaAtual().email;
+    const r = await trocarSenha(email, v.senha, v.nova);
     if (!r.ok) return mostrarErro(r.erro);
+    // Com os dados vindo do banco, troca no servidor também. Se ele recusar, volta a senha do aparelho,
+    // para as duas continuarem iguais.
+    const noServidor = await trocarSenhaNoServidor(v.senha, v.nova);
+    if (!noServidor.ok) {
+      await trocarSenha(email, v.nova, v.senha);
+      return mostrarErro(noServidor.erro);
+    }
     voltarAoApp('Senha trocada.');
   }
 

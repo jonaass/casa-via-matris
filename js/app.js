@@ -593,7 +593,8 @@
     $('faixa-exemplo').hidden = !temExemplos || !pode('administrar');
     // Exemplos não precisam de backup; dados reais sim, mesmo misturados a eles, e são a única cópia.
     const atrasado = !store.soExemplos() && store.movimentos().length > 0 && (dias === null || dias > DIAS_ENTRE_BACKUPS);
-    $('faixa-backup').hidden = !atrasado || !pode('administrar');
+    // Com os dados vindo do banco, a cópia principal fica no servidor: o aviso não se aplica.
+    $('faixa-backup').hidden = !atrasado || !pode('administrar') || modoServidor();
     $('faixa-backup-texto').textContent = `${quando} Os dados só existem neste aparelho: baixe as planilhas e guarde fora dele.`;
   }
 
@@ -665,6 +666,12 @@
     return true;
   }
 
+  // Com os dados vindo do banco, o perfil que vale é o do servidor (servidor.js), não o do aparelho.
+  function perfilEfetivo() {
+    const doServidor = modoServidor() ? lerConfig().servidor.perfil : null;
+    return Object.prototype.hasOwnProperty.call(PERFIS, doServidor) ? doServidor : conta.perfil;
+  }
+
   // Esconder melhora a tela, mas quem barra de verdade são as regras no store.js e no acesso.js.
   function aplicarPerfil() {
     const verEstoque = pode('ver_estoque');
@@ -672,7 +679,7 @@
     const admin = pode('administrar');
     $('conta-resumo').textContent = conta.nome.split(' ')[0];
     $('conta-nome').textContent = conta.nome;
-    $('conta-perfil').textContent = PERFIS[conta.perfil].rotulo;
+    $('conta-perfil').textContent = PERFIS[perfilEfetivo()].rotulo;
     $('area-admin').hidden = !admin;
     $('kpi-saldo-bloco').hidden = !verDinheiro;
     $('kpi-minimo-bloco').hidden = !verEstoque;
@@ -682,11 +689,14 @@
     // O saldo leva ao histórico; quem não tem histórico vê o número, mas sem link.
     if (!pode('historico')) $('kpi-saldo-bloco').removeAttribute('href');
     document.querySelectorAll('.lateral nav a[data-pagina]').forEach((a) => { a.hidden = !podeVerPagina(a.dataset.pagina); });
+    document.querySelectorAll('.atalho-registrar').forEach((a) => { a.hidden = !podeVerPagina('registrar'); });
     $('filtro-area-rotulo').hidden = !(verEstoque && verDinheiro);
 
     const opcoes = [...form.elements.tipo];
     opcoes.forEach((r) => { r.disabled = !pode(r.value); r.closest('label').hidden = r.disabled; });
-    opcoes.find((r) => !r.disabled).checked = true;
+    // Com os dados vindo do banco (servidor.js), nenhuma opção fica liberada: não há o que marcar.
+    const primeira = opcoes.find((r) => !r.disabled);
+    if (primeira) primeira.checked = true;
     form.querySelector('.tipos').dataset.opcoes = String(opcoes.filter((r) => !r.disabled).length);
   }
 
@@ -700,8 +710,10 @@
     if (conferirSessao()) return;
     const { pagina, pedida } = paginaDoEndereco(location.hash);
     if (pedida) {
-      $('sem-permissao-texto').textContent = `A página ${PAGINAS[pedida].rotulo} não faz parte do perfil ${PERFIS[conta.perfil].rotulo}. ` +
-        'Se você precisa dela, peça ao administrador.';
+      const somenteLeitura = pedida === 'registrar' && modoServidor();
+      $('sem-permissao-texto').textContent = somenteLeitura
+        ? 'Os dados agora vêm do banco da casa, e registrar por aqui ainda não está disponível. Essa parte chega na próxima versão.'
+        : `A página ${PAGINAS[pedida].rotulo} não faz parte do perfil ${PERFIS[perfilEfetivo()].rotulo}. Se você precisa dela, peça ao administrador.`;
     }
     document.querySelectorAll('.pagina').forEach((secao) => { secao.hidden = secao.dataset.pagina !== pagina; });
     document.querySelectorAll('.lateral nav a[data-pagina]').forEach((a) => {

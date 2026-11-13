@@ -97,6 +97,11 @@ mesmo se eles falharem: confira a aba depois de enviar.
 - **Backup**: baixa 3 planilhas (estoque, doações, dinheiro) e restaura delas, mesmo depois de editadas no Excel. Avisa quando o último backup tem mais de 7 dias.
 - **Dados de exemplo**: aparecem na primeira abertura. "Começar do zero" apaga tudo para o uso real.
 - **App no celular**: instala na tela inicial e abre sem internet.
+- **Dados do banco (1.3.0)**: aberto pelo servidor Python, o app entra também no servidor e traz do banco só o que
+  o perfil pode ver (Financeiro não recebe estoque; Almoxarifado e Voluntário não recebem dinheiro). Nesta etapa o
+  banco só é lido: registrar e desfazer ficam desligados nesse modo, para nada lançado só no aparelho se perder.
+  A conta precisa ter a mesma senha no aparelho e no servidor: trocar a senha (inclusive a provisória do primeiro
+  acesso) troca nos dois. Vale o perfil do servidor, e sair apaga do aparelho a cópia dos dados do banco.
 - Os dados ficam salvos no aparelho (localStorage) e sobrevivem a recarregar a página.
 
 ## Estrutura
@@ -129,29 +134,35 @@ cada função do `store.js` passa a fazer um `fetch()` para a API. Como `fetch` 
 assíncrono, o `app.js` vai precisar de `await` nessas chamadas e de desativar o botão
 enquanto espera a resposta (senão dois cliques viram dois lançamentos).
 
-## Próximo passo: back-end em Python
+## Back-end em Python (Fase 2, em andamento)
 
-Sugestão para o Anthony, alinhada ao que o grupo usa na faculdade:
+Fica na pasta `backend/`, com **FastAPI** e **SQLite**. Como rodar, criar contas e importar as
+planilhas para o banco: veja [backend/README.md](backend/README.md).
 
-- **Flask** ou **FastAPI** servindo estes mesmos arquivos e uma API JSON.
-- **SQLite** no começo (um arquivo só, sem instalar servidor de banco).
-- Rotas que espelham o `store.js`:
+Quando o site é aberto pelo servidor, depois do login ele **puxa os dados do banco** para o aparelho
+(`js/servidor.js`) e a tela continua igual. No GitHub Pages nada muda: o app segue com os dados do aparelho.
 
-| Função no store.js     | Rota sugerida                       |
-| ---------------------- | ----------------------------------- |
-| `itens()`              | `GET /api/itens`                    |
-| `movimentos()`         | `GET /api/movimentos`               |
-| `registrar(entrada)`   | `POST /api/movimentos`              |
-| `estornar(id)`         | `POST /api/movimentos/{id}/estorno` |
-| `resumo()`             | `GET /api/resumo`                   |
+| Função no store.js     | Rota                                 | Situação |
+| ---------------------- | ------------------------------------ | -------- |
+| `itens()`              | `GET /api/itens`                     | pronta   |
+| `movimentos()`         | `GET /api/doacoes` e `GET /api/dinheiro` | pronta |
+| (login)                | `POST /api/entrar`, `POST /api/sair`, `GET /api/eu`, `POST /api/trocar-senha` | pronta |
+| `registrar(entrada)`   | `POST /api/movimentos`               | próxima etapa |
+| `estornar(id)`         | `POST /api/movimentos/{id}/estorno`  | próxima etapa |
+| `resumo()`             | calculado no aparelho com os dados puxados | |
 
-- Tabelas: `itens`, `movimentos`, `lotes` (validade por lote) e `usuarios`.
 - As validações do `store.js` precisam ser **repetidas no servidor**: o navegador
   pode ser manipulado, então a regra que vale de verdade é a do back-end.
+- Falta: tabela `lotes` (validade por lote), gravação pela API e trocar o login do aparelho pelo do servidor.
 
 ## Riscos
 
 Encontrados na revisão do protótipo. Os marcados como corrigidos têm teste em `tests/`.
+
+### Corrigidos na 1.3.0
+
+- Com o registrar desligado, a tela tentava marcar uma opção que não existia e dava erro no console. Agora confere antes.
+- Testado em Chromium, Firefox e WebKit (motor do Safari), no computador e no tamanho de celular, com os 4 perfis.
 
 ### Corrigidos na 1.2.0
 

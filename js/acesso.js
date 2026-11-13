@@ -163,6 +163,8 @@
 
   function pode(acao) {
     const conta = contaAtual();
+    // Com os dados vindo do banco (servidor.js), registrar e desfazer ficam desligados até a API aceitar gravações.
+    if (typeof bloqueadoPeloServidor === 'function' && bloqueadoPeloServidor(acao)) return false;
     return Boolean(conta && PERFIS[conta.perfil]?.pode.includes(acao));
   }
 
@@ -193,6 +195,7 @@
   function sair(registrar = true) {
     if (registrar && contaAtual()) registrarAuditoria('Saiu do sistema');
     sessaoGuardada().forEach((espaco) => espaco.removeItem(CHAVE_SESSAO));
+    if (typeof sairDoServidor === 'function') sairDoServidor();
   }
 
   /** Primeira abertura neste aparelho: quem chega primeiro cria o administrador. */
