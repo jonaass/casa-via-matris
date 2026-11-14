@@ -1,0 +1,12 @@
+# O que não vai para a Vercel: testes, ferramentas, banco local e configurações do computador.
+.claude/
+.github/
+.pytest_cache/
+tests/
+backend/tests/
+backend/dados/
+backend/.env
+ferramentas/
+*.db
+*.db-wal
+*.db-shm

@@ -29,18 +29,18 @@
     <header class="topo-pagina">
       <h1>Termos de uso e aviso de privacidade</h1>
       <p class="painel-ajuda">Sistema de estoque, doações e finanças da Casa Via Matris.
-        Versão de 13 de novembro de 2026.</p>
+        Versão de 14 de novembro de 2026.</p>
     </header>
 
     <section class="termos-resumo" aria-labelledby="t-resumo">
       <h2 id="t-resumo">O essencial, em 6 pontos</h2>
       <ol>
         <li>É um projeto de estudantes, gratuito e <strong>em desenvolvimento</strong>. Pode ter falhas.</li>
-        <li>Os dados ficam <strong>neste aparelho</strong> ou, quando a casa usar o servidor próprio do sistema, nesse servidor. O sistema não envia o que você registra para a equipe do projeto nem para outras empresas.</li>
+        <li>Os dados ficam <strong>neste aparelho</strong> ou, quando o sistema é aberto pelo endereço do servidor, num banco de dados na internet, em São Paulo (Brasil). O sistema não envia o que você registra para outras empresas além das que hospedam esse servidor (item 4).</li>
         <li><strong>Não registre dados de pessoas acolhidas</strong>: nomes, documentos, saúde ou história de vida.</li>
         <li>Faça o <strong>backup toda semana</strong>. Se o aparelho for perdido ou limpo, só sobra o que foi baixado.</li>
         <li>Sua senha é <strong>pessoal</strong>. O que for lançado com a sua conta fica registrado no seu nome.</li>
-        <li>O sistema <strong>não usa cookies de rastreamento</strong>. Usa só o armazenamento do navegador e, com o servidor da casa, um cookie de sessão. Os dois são necessários para funcionar.</li>
+        <li>O sistema <strong>não usa cookies de rastreamento</strong>. Usa só o armazenamento do navegador e, com o servidor, um cookie de sessão. Os dois são necessários para funcionar.</li>
       </ol>
     </section>
 
@@ -72,17 +72,20 @@
       <ul>
         <li>Tudo o que é registrado (itens, doações, valores, contas e atividades) fica guardado <strong>no navegador deste
             aparelho</strong>.</li>
-        <li><strong>Servidor da casa (em teste).</strong> Quando o sistema é aberto pelo servidor próprio da Casa Via Matris,
-          os dados ficam guardados num banco de dados nesse servidor, cuidado pela casa. Ao entrar, o e-mail e a senha são
-          conferidos lá, e o aparelho recebe uma cópia só da parte que o seu perfil pode ver. Essa cópia é apagada do
-          aparelho ao sair. A equipe do projeto não guarda cópia desse banco.</li>
-        <li>O sistema <strong>não envia</strong> esses dados para a equipe do projeto nem para ninguém, e a equipe não
-          guarda cópia deles.</li>
+        <li><strong>Servidor na internet (em teste).</strong> Quando o sistema é aberto pelo endereço do servidor, os dados
+          ficam guardados num banco de dados na internet, para que todos os aparelhos vejam os mesmos registros. O
+          servidor roda na <strong>Vercel</strong> e o banco fica no <strong>Neon</strong>, os dois em
+          <strong>São Paulo (Brasil)</strong>. Essas empresas guardam os dados em nome da Casa Via Matris e não os usam
+          para outros fins, conforme as políticas de privacidade delas. Ao entrar, o e-mail e a senha são conferidos no
+          servidor, e o aparelho recebe uma cópia só da parte que o seu perfil pode ver. Essa cópia é apagada do aparelho
+          ao sair.</li>
+        <li>Quem administra a conta do servidor (hoje, a equipe do projeto) consegue acessar esse banco. Esse acesso é
+          usado só para manter o sistema funcionando, e os dados não são enviados a mais ninguém.</li>
         <li>O site é entregue pelo GitHub Pages, que envia apenas os arquivos do programa. Como qualquer site, o servidor
           do GitHub registra dados técnicos da conexão, como o endereço IP, conforme a política de privacidade do GitHub.</li>
         <li>As planilhas de backup são baixadas para o aparelho de quem as baixou. A partir daí, quem as guarda responde
           por elas.</li>
-        <li>Sem o servidor da casa, dados registrados num aparelho não aparecem em outro, e cada aparelho tem as próprias contas.</li>
+        <li>Sem o servidor, dados registrados num aparelho não aparecem em outro, e cada aparelho tem as próprias contas.</li>
       </ul>
     </section>
 
@@ -143,10 +146,10 @@
     <section aria-labelledby="t-8">
       <h2 id="t-8">8. Cookies e armazenamento no aparelho</h2>
       <p>O sistema <strong>não usa cookies de rastreamento</strong>, nem ferramentas de análise, propaganda ou rastreamento, e não envia
-        dados para outras empresas. As fontes de letra também são entregues pelo próprio site.</p>
-      <p>Quando o sistema é aberto pelo servidor da casa, ele usa <strong>um único cookie de sessão</strong> (vm_sessao),
+        dados para outras empresas além das que hospedam o servidor (item 4). As fontes de letra também são entregues pelo próprio site.</p>
+      <p>Quando o sistema é aberto pelo servidor, ele usa <strong>um único cookie de sessão</strong> (vm_sessao),
         que guarda só um código aleatório para lembrar que você entrou. Ele não pode ser lido por outros sites nem por
-        scripts da página, vale por no máximo 8 horas e é apagado ao sair. Por ser estritamente necessário para o login,
+        scripts da página, vale por no máximo 8 horas (30 dias com "Manter conectado") e é apagado ao sair. Por ser estritamente necessário para o login,
         também não depende de um aceite separado.</p>
       <p>Ele usa o <strong>armazenamento do navegador</strong> (localStorage, sessionStorage e cache), que é indispensável para funcionar:
         é ali que ficam as contas, a sessão aberta, os lançamentos e os arquivos que permitem abrir o sistema sem
@@ -158,7 +161,7 @@
     <section aria-labelledby="t-9">
       <h2 id="t-9">9. Segurança e seus limites</h2>
       <p>As senhas são guardadas embaralhadas, as contas são bloqueadas depois de várias tentativas erradas e cada perfil
-        vê só a sua parte. Mesmo assim, sem o servidor da casa, o login <strong>organiza quem usa o
+        vê só a sua parte. Mesmo assim, sem o servidor, o login <strong>organiza quem usa o
           aparelho, mas não é um cofre</strong>: quem tiver o aparelho nas mãos e conhecimento técnico consegue ler os
         dados guardados no navegador. É por isso que o item 6 é tão importante.</p>
       <p>Enquanto estiver no endereço de teste (jonaass.github.io), o sistema divide o armazenamento do navegador com

@@ -70,6 +70,46 @@ python -m pytest backend/tests
 O teste `test_perfis_iguais_ao_acesso_js` lê o `js/acesso.js` (precisa do Node.js) e falha se os perfis
 de lá e daqui ficarem diferentes.
 
+Para rodar os mesmos testes num Postgres (o GitHub Actions faz isso a cada envio), aponte
+`VM_TESTE_POSTGRES` para um banco **vazio e só de teste**: cada teste apaga e recria as tabelas dele.
+
+```bash
+VM_TESTE_POSTGRES=postgresql://usuario:senha@localhost:5432/teste python -m pytest backend/tests
+```
+
+## Publicar na Vercel com Postgres (1.6.0)
+
+Na Vercel não existe disco que dure: o arquivo do SQLite seria apagado a cada publicação. Por isso, lá o
+banco é um **Postgres** (Neon). O código é o mesmo: com a variável `DATABASE_URL`, o `banco.py` usa o
+Postgres; sem ela, o SQLite de sempre. As diferenças ficam todas no `banco.py`:
+
+- o SQL é escrito com `?` (SQLite) e vira `%s` no Postgres;
+- `BEGIN IMMEDIATE` (uma gravação por vez) vira a trava `pg_advisory_xact_lock`;
+- nas migrações, `INTEGER` vira `BIGINT`, `REAL` vira `DOUBLE PRECISION`, e `doacoes` e `dinheiro` ganham a
+  coluna `rowid` (a ordem de gravação que o SQLite já tem sozinho);
+- a versão do banco fica na tabela `versao_do_banco` (no SQLite, no `user_version`).
+
+Arquivos da Vercel na raiz: `pyproject.toml` (dependências e `entrypoint = "backend.principal:app"`),
+`vercel.json` (região `gru1`, São Paulo), `.python-version` e `.vercelignore` (testes e ferramentas não sobem).
+
+Variáveis no projeto da Vercel:
+
+| Variável | Valor |
+| --- | --- |
+| `DATABASE_URL` | criada pela integração do Neon (Storage → Neon, região São Paulo) |
+| `VM_ORIGENS` | o endereço do site, ex.: `https://casa-via-matris.vercel.app` |
+| `VM_COOKIE_SEGURO` | `1` |
+
+As contas e as planilhas entram pelo seu computador, apontando para o banco da Vercel:
+
+```bash
+DATABASE_URL="<copie do painel da Vercel>" python -m backend.usuarios criar "Nome" email@exemplo.com administrador
+DATABASE_URL="<copie do painel da Vercel>" python -m backend.importar via-matris-*.csv
+```
+
+O limite de erros de login por IP também fica no banco (migração 004): na Vercel, cada pedido pode cair numa
+cópia diferente do servidor, com a memória vazia.
+
 ## Arquivos
 
 | Arquivo | O que faz |
@@ -148,7 +188,7 @@ As duas rotas sem sessão não abrem sessão: depois delas, o site chama `/api/e
 1. (Feito na 1.5.0: gravar pela API.)
 2. (Feito na 1.5.0: um login só, o do servidor.)
 3. Tabela `lotes` para a validade por lote.
-4. Publicar num servidor com https e domínio próprio. Atrás de um proxy (Nginx, Render, Railway...), rode o
+4. (1.6.0: publicado na Vercel com Postgres; veja acima.) Em outro servidor atrás de um proxy (Nginx, Render, Railway...), rode o
    uvicorn com `--proxy-headers`: sem isso o servidor não sabe que o endereço é https (o cookie sai sem `Secure`)
    e enxerga todo mundo com o IP do proxy (o limite de erros de login por IP passaria a valer para todos juntos).
 5. Em produção, preencher `VM_ORIGENS` com o endereço do site e usar `VM_COOKIE_SEGURO=1`.

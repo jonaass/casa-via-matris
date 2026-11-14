@@ -1,0 +1,15 @@
+# Configuração para publicar na Vercel. O site e a API saem do mesmo servidor FastAPI
+# (backend/principal.py), que precisa ficar no mesmo endereço do site por causa da CSP.
+# Para rodar no computador, nada muda: veja backend/README.md.
+[project]
+name = "casa-via-matris"
+version = "1.6.0"
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi>=0.115",
+  "psycopg[binary]>=3.2",
+  "tzdata>=2024.1",
+]
+
+[tool.vercel]
+entrypoint = "backend.principal:app"

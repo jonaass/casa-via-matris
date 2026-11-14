@@ -19,7 +19,7 @@ import sqlite3
 from datetime import date, datetime, timezone
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 
-from . import config, seguranca
+from . import banco, config, seguranca
 
 TIPOS = {
     "doacao_item": {"area": "estoque", "contrario": "saida_item"},
@@ -317,7 +317,7 @@ def estornar(con: sqlite3.Connection, perfil: str, codigo: str) -> dict:
         raise Recusa(NEGADO, status=403)
     try:
         return _em_transacao(con, lambda: _estornar(con, perfil, codigo))
-    except sqlite3.IntegrityError:
+    except banco.ErroDeIntegridade:
         # O índice único de estorno_de: outro pedido desfez a mesma movimentação no mesmo instante.
         raise Recusa("Essa movimentação já foi desfeita.", status=409) from None
 

@@ -63,7 +63,7 @@
    * Versão dos Termos de uso e do Aviso de privacidade (termos.html). Ao mudar o texto dos
    * termos, mude esta data: todo mundo precisa aceitar de novo na próxima entrada.
    */
-  const TERMOS_VERSAO = '2026-11-13';
+  const TERMOS_VERSAO = '2026-11-14';
 
   const ITERACOES = 600000; // PBKDF2-SHA256, número recomendado pela OWASP
   const SENHA_MINIMA = 8;

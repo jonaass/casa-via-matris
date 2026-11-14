@@ -1,5 +1,6 @@
 """Testes da API. Rodar da pasta do projeto: python -m pytest backend/tests"""
 import json
+import os
 import shutil
 import sqlite3
 import subprocess
@@ -12,11 +13,15 @@ import pytest
 from fastapi.testclient import TestClient
 
 from backend import banco, importar, movimentos, seguranca
-from backend.principal import _erros_por_ip, app
+from backend.principal import app
 
 RAIZ = Path(__file__).resolve().parents[2]
 PLANILHAS = RAIZ / "tests" / "planilhas"
 ORIGEM = {"Origin": "http://testserver"}
+# Com VM_TESTE_POSTGRES=<endereço de um Postgres vazio>, os testes rodam também no Postgres
+# (é o que o GitHub Actions faz). Cada teste apaga e recria as tabelas desse banco.
+POSTGRES = os.environ.get("VM_TESTE_POSTGRES", "").strip()
+so_sqlite = pytest.mark.skipif(bool(POSTGRES), reason="mexe direto no arquivo do SQLite")
 SENHA = "senha-de-teste-123"
 
 
@@ -24,7 +29,14 @@ SENHA = "senha-de-teste-123"
 def con(tmp_path, monkeypatch):
     monkeypatch.setenv("VM_BANCO", str(tmp_path / "teste.db"))
     monkeypatch.delenv("VM_COOKIE_SEGURO", raising=False)  # padrão "auto": o cliente de teste usa http
-    _erros_por_ip.clear()
+    if POSTGRES:
+        monkeypatch.setenv("DATABASE_URL", POSTGRES)
+        import psycopg
+        with psycopg.connect(POSTGRES, autocommit=True) as pg:
+            pg.execute("DROP SCHEMA public CASCADE")
+            pg.execute("CREATE SCHEMA public")
+    else:
+        monkeypatch.delenv("DATABASE_URL", raising=False)
     c = banco.abrir_banco()
     # Poucas iterações só para o teste ser rápido; contas de verdade usam 600 mil.
     # Contas prontas para entrar: senha própria (não provisória) e termos aceitos.
@@ -298,7 +310,9 @@ def test_conta_desativada_nao_revela_senha_certa(cliente, con):
 def test_limite_por_ip_responde_429_e_nao_guarda_ip_sem_erro(cliente):
     from backend import principal
     assert entrar(cliente, "administrador").status_code == 200
-    assert principal._erros_por_ip == {}  # login certo não fica guardado
+    c = banco.conectar()
+    assert c.execute("SELECT count(*) FROM erros_de_login").fetchone()[0] == 0  # login certo não fica guardado
+    c.close()
     for i in range(principal.LIMITE_POR_IP):
         cliente.post("/api/entrar", json={"email": f"x{i}@teste.com", "senha": "x" * 10}, headers=ORIGEM)
     assert entrar(cliente, "administrador").status_code == 429
@@ -578,7 +592,7 @@ def test_desfazer_duas_vezes_e_desfazer_o_contrario_sao_recusados(cliente, con):
     assert r.status_code == 422 and r.json() == {"erro": "Esse lançamento já desfaz outro e não pode ser desfeito."}
     assert desfazer(cliente, "nao-existe").json() == {"erro": "Essa movimentação não existe mais."}
     # E o próprio banco recusa um segundo contrário, mesmo que o código deixe passar.
-    with pytest.raises(sqlite3.IntegrityError):
+    with pytest.raises(banco.ErroDeIntegridade):
         with con:
             con.execute("INSERT INTO dinheiro (codigo, tipo, data, valor_centavos, descricao, criado_em, estorno_de)"
                         " VALUES ('z', 'saida_dinheiro', '2026-01-01', 700, 'x', 'x', ?)", (mov["codigo"],))
@@ -939,6 +953,7 @@ def test_comando_senha_deixa_a_conta_provisoria(con, monkeypatch):
     assert r.status_code == 403 and r.json()["campo"] == "senhaProvisoria"
 
 
+@so_sqlite
 def test_migracao_003_conta_antiga_aceita_os_termos_e_entra(tmp_path, monkeypatch):
     """Banco da versão 2 com uma conta: depois da 003, a pessoa só entra depois de aceitar os termos."""
     caminho = tmp_path / "antigo.db"
@@ -954,9 +969,22 @@ def test_migracao_003_conta_antiga_aceita_os_termos_e_entra(tmp_path, monkeypatc
     c.commit()
     c.close()
     monkeypatch.setenv("VM_BANCO", str(caminho))
-    _erros_por_ip.clear()
+    monkeypatch.delenv("DATABASE_URL", raising=False)
     with TestClient(app) as cliente:  # "with": o servidor liga e roda as migrações, como de verdade
         assert entrar_email(cliente, "antiga@teste.com").json()["campo"] == "termos"
         assert aceitar(cliente, "antiga@teste.com").status_code == 200
         assert entrar_email(cliente, "antiga@teste.com").status_code == 200
         assert cliente.get("/api/dinheiro").status_code == 200
+
+
+def test_traducao_do_sql_para_o_postgres():
+    assert banco.traduzir("SELECT * FROM itens WHERE codigo = ? ORDER BY nome COLLATE NOCASE") == \
+        "SELECT * FROM itens WHERE codigo = %s ORDER BY lower(nome)"
+    assert banco.traduzir("SELECT '50%' WHERE a = ?") == "SELECT '50%%' WHERE a = %s"
+    script = (banco.PASTA_MIGRACOES / "001_inicial.sql").read_text(encoding="utf-8")
+    comandos = banco._sql_da_migracao(script, postgres=True)
+    doacoes = next(c for c in comandos if c.startswith("CREATE TABLE doacoes"))
+    assert "rowid BIGSERIAL" in doacoes and "INTEGER" not in doacoes
+    usuarios = next(c for c in comandos if c.startswith("CREATE TABLE usuarios"))
+    assert "bloqueado_ate   DOUBLE PRECISION" in usuarios
+    assert banco._sql_da_migracao(script, postgres=False) == banco._comandos(script)

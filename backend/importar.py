@@ -233,8 +233,9 @@ def importar_texto(con: sqlite3.Connection, texto: str) -> dict:
         for r in registros:
             numero = r["_linha"]
             try:
-                entrou = IMPORTADORES[colecao](con, r)
-            except (LinhaRuim, sqlite3.IntegrityError) as e:
+                with banco.linha_protegida(con):
+                    entrou = IMPORTADORES[colecao](con, r)
+            except (LinhaRuim, *banco.ErroDeIntegridade) as e:
                 resultado["erros"].append(f"Linha {numero}: {e}")
                 continue
             resultado["importados" if entrou else "ignorados"] += 1

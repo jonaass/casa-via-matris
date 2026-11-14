@@ -37,6 +37,11 @@ def caminho_do_banco() -> Path:
     return caminho if caminho.is_absolute() else RAIZ_DO_SITE / caminho
 
 
+def url_do_postgres() -> str:
+    """Endereço do Postgres (na Vercel, o banco Neon cria DATABASE_URL). Vazio: usa o SQLite do VM_BANCO."""
+    return os.environ.get("DATABASE_URL", "").strip()
+
+
 def cookie_seguro(endereco_https: bool) -> bool:
     """O cookie de sessão só viaja por https? "auto" (padrão): sim quando o site foi aberto por https.
     Em http://localhost precisa ser não, senão o Safari não guarda o cookie e o login não fica."""

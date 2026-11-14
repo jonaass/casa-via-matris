@@ -39,7 +39,7 @@ ERRO_LOGIN = "E-mail ou senha incorretos."
 
 # Versão dos Termos de uso (termos.html). Igual à do js/acesso.js: mudou lá, muda aqui,
 # e todo mundo precisa aceitar de novo na próxima entrada.
-TERMOS_VERSAO = "2026-11-13"
+TERMOS_VERSAO = "2026-11-14"
 ERRO_PROVISORIA = "A senha que você recebeu vale só para o primeiro acesso. Crie a sua senha para continuar."
 ERRO_FALTAM_TERMOS = "Antes de continuar, leia e aceite os Termos de uso e o Aviso de privacidade."
 ERRO_TERMOS = "Para continuar, leia e marque que aceita os Termos de uso e o Aviso de privacidade."  # o mesmo do acesso.js

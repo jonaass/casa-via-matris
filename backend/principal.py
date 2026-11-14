@@ -14,7 +14,6 @@ movimentos.py e repetem as do js/store.js.
 import os
 import sqlite3
 import time
-from collections import deque
 from contextlib import asynccontextmanager
 from typing import Any
 
@@ -152,45 +151,30 @@ def conferir_origem(request: Request) -> None:
 
 
 # Limite de tentativas de login por IP (além do bloqueio por conta): 20 erros em 15 minutos.
-# Só IPs com erro recente ficam guardados, para a memória não crescer sem fim.
-# Atrás de um proxy, rode o uvicorn com --proxy-headers --forwarded-allow-ips=<IP do proxy>:
-# sem isso, todos aparecem com o IP do proxy (ou qualquer um troca o IP pelo X-Forwarded-For).
-_erros_por_ip: dict[str, deque] = {}
+# Fica no banco (migração 004): na Vercel, cada pedido pode cair numa cópia diferente do servidor,
+# e um limite guardado na memória de uma cópia não valeria para as outras.
 LIMITE_POR_IP = 20
 
 
-def _limpar_fila(ip: str) -> deque | None:
-    fila = _erros_por_ip.get(ip)
-    if fila is None:
-        return None
-    while fila and fila[0] < time.time() - seguranca.BLOQUEIO_S:
-        fila.popleft()
-    if not fila:
-        del _erros_por_ip[ip]
-        return None
-    return fila
-
-
-def _reservar_tentativa(ip: str) -> bool:
+def _reservar_tentativa(con, ip: str) -> bool:
     """Anota a tentativa ANTES de conferir a senha (pedidos em paralelo não passam do limite).
     Devolve False se o IP já chegou ao limite."""
-    if len(_erros_por_ip) > 10_000:  # faxina de vez em quando
-        for antigo in list(_erros_por_ip):
-            _limpar_fila(antigo)
-    fila = _limpar_fila(ip)
-    if fila is not None and len(fila) >= LIMITE_POR_IP:
-        return False
-    _erros_por_ip.setdefault(ip, deque()).append(time.time())
+    agora = time.time()
+    with banco.gravacao(con):
+        con.execute("DELETE FROM erros_de_login WHERE em < ?", (agora - seguranca.BLOQUEIO_S,))  # faxina
+        erros = con.execute("SELECT count(*) FROM erros_de_login WHERE ip = ?", (ip,)).fetchone()[0]
+        if erros >= LIMITE_POR_IP:
+            return False
+        con.execute("INSERT INTO erros_de_login (ip, em) VALUES (?, ?)", (ip, agora))
     return True
 
 
-def _devolver_tentativa(ip: str) -> None:
-    """Login certo não conta como erro."""
-    fila = _erros_por_ip.get(ip)
-    if fila:
-        fila.pop()
-        if not fila:
-            del _erros_por_ip[ip]
+def _devolver_tentativa(con, ip: str) -> None:
+    """Login certo não conta como erro: apaga a anotação mais recente deste IP.
+    shortcut: duas anotações com o mesmo instante exato saem juntas; só deixa o limite um pouco mais folgado."""
+    with con:
+        con.execute("DELETE FROM erros_de_login WHERE ip = ? AND em = (SELECT max(em) FROM erros_de_login WHERE ip = ?)",
+                    (ip, ip))
 
 
 # ---------- rotas da API ----------
@@ -216,13 +200,17 @@ def _conta_publica(u: sqlite3.Row) -> dict:
 
 
 def _ip(request: Request) -> str:
+    # Na Vercel, o pedido chega por um proxy dela, que põe o IP de quem pediu em x-real-ip
+    # (e troca o que o navegador tiver mandado nesse cabeçalho).
+    if os.environ.get("VERCEL") == "1" and request.headers.get("x-real-ip"):
+        return request.headers["x-real-ip"]
     return request.client.host if request.client else "?"
 
 
-def _sem_excesso_de_tentativas(request: Request) -> str:
+def _sem_excesso_de_tentativas(request: Request, con) -> str:
     """O mesmo limite por IP do login, para toda rota que confere senha sem sessão."""
     ip = _ip(request)
-    if not _reservar_tentativa(ip):
+    if not _reservar_tentativa(con, ip):
         raise ErroDaApi(429, "Muitas tentativas seguidas. Espere alguns minutos e tente de novo.")
     return ip
 
@@ -231,11 +219,11 @@ def _sem_excesso_de_tentativas(request: Request) -> str:
 def entrar(dados: Login, request: Request, response: Response, con: sqlite3.Connection = Depends(obter_banco)):
     """Entra e abre a sessão (cookie). Senha provisória ou termos sem aceite: 403, sem cookie, com
     campo "senhaProvisoria" (use /api/definir-senha) ou "termos" (use /api/aceitar-termos)."""
-    ip = _sem_excesso_de_tentativas(request)
+    ip = _sem_excesso_de_tentativas(request, con)
     usuario, erro = seguranca.validar_login(con, dados.email, dados.senha)
     if erro:
         raise ErroDaApi(401, erro)
-    _devolver_tentativa(ip)  # a senha estava certa: não conta como erro
+    _devolver_tentativa(con, ip)  # a senha estava certa: não conta como erro
     # Só depois da senha certa: quem é de fora não descobre se a conta é provisória.
     falta = seguranca.pendencia(usuario)
     if falta:
@@ -260,16 +248,16 @@ class AceitarTermos(BaseModel):
     aceito: bool = False
 
 
-def _conta_sem_sessao(request: Request, tarefa) -> dict:
+def _conta_sem_sessao(request: Request, con, tarefa) -> dict:
     """Para as rotas que conferem e-mail e senha sem sessão: limite por IP e as recusas no formato de erro."""
-    ip = _sem_excesso_de_tentativas(request)
+    ip = _sem_excesso_de_tentativas(request, con)
     try:
         tarefa()
     except seguranca.Recusa as e:
         if e.status != 401:
-            _devolver_tentativa(ip)  # a senha estava certa (ou nem foi conferida): não conta como erro
+            _devolver_tentativa(con, ip)  # a senha estava certa (ou nem foi conferida): não conta como erro
         raise ErroDaApi(e.status, e.erro, e.campo) from None
-    _devolver_tentativa(ip)
+    _devolver_tentativa(con, ip)
     return {"ok": True}
 
 
@@ -277,14 +265,14 @@ def _conta_sem_sessao(request: Request, tarefa) -> dict:
 def definir_senha(dados: DefinirSenha, request: Request, con: sqlite3.Connection = Depends(obter_banco)):
     """Primeiro acesso (senha provisória): cria a senha da pessoa e anota o aceite dos termos.
     Não abre sessão: depois, o site chama /api/entrar com a senha nova."""
-    return _conta_sem_sessao(request, lambda: seguranca.definir_senha(
+    return _conta_sem_sessao(request, con, lambda: seguranca.definir_senha(
         con, dados.email, dados.senhaAtual, dados.novaSenha, dados.aceitouTermos))
 
 
 @app.post("/api/aceitar-termos", tags=["conta"], dependencies=[Depends(conferir_origem)])
 def aceitar_termos(dados: AceitarTermos, request: Request, con: sqlite3.Connection = Depends(obter_banco)):
     """Quem já tem senha própria aceita a versão atual dos termos. Depois, o site chama /api/entrar."""
-    return _conta_sem_sessao(request, lambda: seguranca.aceitar_termos(con, dados.email, dados.senha, dados.aceito))
+    return _conta_sem_sessao(request, con, lambda: seguranca.aceitar_termos(con, dados.email, dados.senha, dados.aceito))
 
 
 @app.post("/api/sair", tags=["conta"], dependencies=[Depends(conferir_origem)])

@@ -1,5 +1,7 @@
 # Bibliotecas do back-end. Instale com: pip install -r backend/requirements.txt
 fastapi>=0.115
+# Só quando DATABASE_URL aponta para um Postgres (na Vercel). Sem ele, o SQLite continua funcionando.
+psycopg[binary]>=3.2
 uvicorn>=0.30
 # O Windows não traz a tabela de fusos horários; sem isto, "America/Sao_Paulo" não existe.
 tzdata>=2024.1

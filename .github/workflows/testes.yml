@@ -8,6 +8,15 @@ on:
 jobs:
   testes:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: teste
+          POSTGRES_PASSWORD: teste
+          POSTGRES_DB: teste
+        ports: ['5432:5432']
+        options: --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
     steps:
       - uses: actions/checkout@v4
         with:
@@ -24,6 +33,11 @@ jobs:
           python-version: '3.12'
       - run: pip install -r backend/requirements.txt
       - run: python -m pytest backend/tests -q
+      # Os mesmos testes no Postgres, o banco da Vercel (o serviço "postgres" lá embaixo).
+      - name: Testes do back-end no Postgres
+        env:
+          VM_TESTE_POSTGRES: postgresql://teste:teste@localhost:5432/teste
+        run: python -m pytest backend/tests -q
 
       # Sem mudar a VERSAO, os celulares continuam com os arquivos antigos.
       - name: Confere a VERSAO
