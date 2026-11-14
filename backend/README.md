@@ -44,11 +44,15 @@ Para ver as rotas em http://localhost:8000/docs, ligue a página com `VM_DOCS=1`
 Com o servidor, **um login só**: quem decide quem entra é o servidor. A conta do aparelho é só uma cópia da conta
 do servidor (nome, perfil e aceite dos termos), criada no primeiro login, sem senha guardada.
 
-- **Pessoa nova:** `python -m backend.usuarios criar "Nome" email@exemplo.com almoxarifado`. Entregue a senha
-  pessoalmente.
+- **Pessoa nova:** `python -m backend.usuarios criar "Nome" email@exemplo.com almoxarifado`. A senha que você
+  digitar é **provisória**: entregue pessoalmente. No primeiro acesso, o app pede para a pessoa criar a senha dela
+  e aceitar os Termos de uso (`POST /api/definir-senha`); até lá, o servidor não abre sessão para ela.
 - **Trocar senha** (menu Conta do app): troca só no servidor.
-- **Esqueci a senha:** `python -m backend.usuarios senha email@exemplo.com`. (O código de recuperação do app é só
-  das contas do aparelho e não aparece no modo servidor.)
+- **Esqueci a senha:** `python -m backend.usuarios senha email@exemplo.com`. A senha nova também é provisória.
+  (O código de recuperação do app é só das contas do aparelho e não aparece no modo servidor.)
+- **Termos de uso:** o servidor só deixa entrar quem aceitou a versão atual (`TERMOS_VERSAO` em `seguranca.py`,
+  igual à do `js/acesso.js`; um teste confere). Contas de antes da 1.5.0 aceitam na próxima entrada
+  (`POST /api/aceitar-termos`). Mudou o texto dos termos: mude a data nos dois arquivos.
 - **Desativar** quem saiu da equipe: `python -m backend.usuarios desativar email@exemplo.com` (e `ativar` para voltar).
 - **Perfil:** vale o do servidor; trocou lá, vale no aparelho na próxima abertura.
 - A página Acessos do app, no modo servidor, não cadastra nem muda contas: ela aponta para estes comandos.
@@ -73,7 +77,7 @@ de lá e daqui ficarem diferentes.
 | `principal.py` | As rotas da API, os cabeçalhos de segurança e os arquivos do site. |
 | `banco.py` | Conexão com o SQLite e migrações. |
 | `migracoes/001_inicial.sql` | As tabelas. Mudança no banco = arquivo novo, com o próximo número, nunca editar o antigo. |
-| `migracoes/003_estorno_e_termos.sql` | Lançamento contrário (`estorno_de`) e `guardou_validade`. |
+| `migracoes/003_estorno_e_termos.sql` | Lançamento contrário (`estorno_de`), `guardou_validade`, senha provisória e aceite dos termos. |
 | `movimentos.py` | Registrar e desfazer, com as regras do `store.js`, numa transação. |
 | `seguranca.py` | Perfis (iguais ao `acesso.js`), senhas e sessões. |
 | `importar.py` | Planilhas de backup do app → banco. |
@@ -87,6 +91,12 @@ de lá e daqui ficarem diferentes.
   e-mail inexistente e senha errada dão a mesma resposta. Também há limite de erros por IP.
 - O banco guarda só o hash do token da sessão. Cookie `HttpOnly` e `SameSite=Strict`, e `Secure` quando o site
   é aberto por https. (Em `http://localhost` não pode ser `Secure`: o Safari não guardaria o login.)
+- Senha provisória e aceite dos termos conferidos no servidor (migração 003: `provisoria`, `termos_versao`, `termos_em`).
+  Faltando algum, `POST /api/entrar` responde 403 com `campo` `"senhaProvisoria"` ou `"termos"` e não dá cookie, e uma
+  sessão que já estava aberta deixa de valer (como o `contaAtual()` do app). Isso só aparece depois da senha certa:
+  quem é de fora não descobre se a conta é provisória.
+- `POST /api/definir-senha` e `POST /api/aceitar-termos` não usam sessão: conferem e-mail e senha de novo, com o
+  mesmo bloqueio por conta, o mesmo limite por IP e a mesma conferência de `Origin` do login.
 - Trocar a senha confere a atual e fecha as outras sessões da conta. Sair fecha a sessão e apaga do aparelho a
   cópia dos dados do banco, para a próxima pessoa não ficar com os dados de quem saiu.
 - Pedidos que gravam (`entrar`, `sair`, `trocar-senha`, `movimentos`) conferem o cabeçalho `Origin` (contra CSRF).
@@ -121,6 +131,18 @@ O item cadastrado por uma doação desfeita continua na tabela, com quantidade 0
 `guardou_validade` (migração 003): 1 quando a validade de antes foi anotada ao gravar pela API. Nos movimentos que
 vieram das planilhas ela é 0, e desfazê-los não mexe na validade do item (não se sabe qual era).
 
+## Rotas de conta (1.5.0)
+
+| Rota | Sessão | Corpo | O que faz |
+| --- | --- | --- | --- |
+| `POST /api/entrar` | não | `email`, `senha`, `manter` | Abre a sessão. 401 senha errada; 403 com `campo` `senhaProvisoria` ou `termos`; 429 tentativas demais. |
+| `POST /api/definir-senha` | não | `email`, `senhaAtual`, `novaSenha`, `aceitouTermos` | Só conta provisória: senha nova e aceite dos termos. 409 se a conta já tem senha própria. |
+| `POST /api/aceitar-termos` | não | `email`, `senha`, `aceito` | Aceita a versão atual dos termos. 409 se a senha ainda é provisória. |
+| `POST /api/trocar-senha` | sim | `senhaAtual`, `novaSenha` | Troca a senha de quem está logado. |
+| `GET /api/eu` | sim | | Nome, e-mail, perfil, permissões, `termosVersao` e `termosEm`. |
+
+As duas rotas sem sessão não abrem sessão: depois delas, o site chama `/api/entrar` com a senha (nova).
+
 ## Próxima etapa
 
 1. (Feito na 1.5.0: gravar pela API.)
@@ -130,8 +152,7 @@ vieram das planilhas ela é 0, e desfazê-los não mexe na validade do item (nã
    uvicorn com `--proxy-headers`: sem isso o servidor não sabe que o endereço é https (o cookie sai sem `Secure`)
    e enxerga todo mundo com o IP do proxy (o limite de erros de login por IP passaria a valer para todos juntos).
 5. Em produção, preencher `VM_ORIGENS` com o endereço do site e usar `VM_COOKIE_SEGURO=1`.
-6. O servidor ainda não conhece a senha provisória nem o aceite dos termos (hoje quem confere é o aparelho):
-   migração com `provisoria`, `termos_versao` e `termos_em`, e o `usuario_logado` recusando quando faltar.
+6. (Feito na 1.5.0: senha provisória e aceite dos termos conferidos no servidor.)
 7. Decidir com o grupo se o Voluntário deve receber o histórico de doações (hoje `/api/doacoes` pede só `ver_estoque`,
    e no app o Voluntário não tem a página Histórico).
 

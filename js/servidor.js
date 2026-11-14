@@ -95,6 +95,35 @@
     return abrirSessaoDoServidor(puxado.conta, manter);
   }
 
+  /*
+   * Senha provisória ou termos sem aceite: o servidor recusa a entrada com 403 e campo "senhaProvisoria"
+   * ou "termos" (a tela de entrada mostra a tela certa). Estas duas funções resolvem a pendência no
+   * servidor, conferindo e-mail e senha de novo, e depois entram normalmente.
+   */
+  async function resolverEEntrar(caminho, corpo, email, senhaParaEntrar, manter) {
+    let r;
+    try {
+      r = await pedir(caminho, { method: 'POST', body: JSON.stringify(corpo) });
+    } catch (e) {
+      return falha(MSG_CONEXAO_CAIU);
+    }
+    if (r.status !== 200) {
+      return { ...falha((r.corpo && r.corpo.erro) || 'O servidor recusou. Tente de novo.'), campo: (r.corpo && r.corpo.campo) || null };
+    }
+    return entrarPeloServidor(email, senhaParaEntrar, manter);
+  }
+
+  /** Primeiro acesso: troca a senha provisória pela da pessoa, com o aceite dos termos, e entra. */
+  function definirSenhaPeloServidor(email, senhaAtual, novaSenha, aceitouTermos, manter = false) {
+    return resolverEEntrar('api/definir-senha', { email, senhaAtual, novaSenha, aceitouTermos: aceitouTermos === true },
+      email, novaSenha, manter);
+  }
+
+  /** Quem já tem senha própria aceita a versão atual dos termos e entra. */
+  function aceitarTermosPeloServidor(email, senha, aceito, manter = false) {
+    return resolverEEntrar('api/aceitar-termos', { email, senha, aceito: aceito === true }, email, senha, manter);
+  }
+
   /** O servidor da casa responde agora? (A tela de entrada usa para escolher os textos.) */
   const servidorNoAr = () => temServidor();
 
@@ -302,5 +331,5 @@
     if (lerConfig().sairPendente) fecharSessaoNoServidor();
   }
 
-  Object.assign(globalThis, { gravarNoServidor, estornarNoServidor, entrarPeloServidor, servidorNoAr, modoServidor, limparCopia, copiaDeOutraPessoa, terminarSaidaPendente, bloqueadoPeloServidor, puxarDoServidor, sairDoServidor, trocarSenhaNoServidor });
+  Object.assign(globalThis, { gravarNoServidor, estornarNoServidor, entrarPeloServidor, definirSenhaPeloServidor, aceitarTermosPeloServidor, servidorNoAr, modoServidor, limparCopia, copiaDeOutraPessoa, terminarSaidaPendente, bloqueadoPeloServidor, puxarDoServidor, sairDoServidor, trocarSenhaNoServidor });
 })();

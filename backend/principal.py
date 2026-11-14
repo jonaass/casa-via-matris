@@ -210,23 +210,81 @@ class Login(BaseModel):
 
 
 def _conta_publica(u: sqlite3.Row) -> dict:
-    return {"nome": u["nome"], "email": u["email"], "perfil": u["perfil"], "pode": seguranca.PERFIS[u["perfil"]]}
+    # termosVersao e termosEm: o app guarda na cópia da conta, e a página Acessos mostra quando aceitou.
+    return {"nome": u["nome"], "email": u["email"], "perfil": u["perfil"], "pode": seguranca.PERFIS[u["perfil"]],
+            "termosVersao": u["termos_versao"], "termosEm": u["termos_em"]}
+
+
+def _ip(request: Request) -> str:
+    return request.client.host if request.client else "?"
+
+
+def _sem_excesso_de_tentativas(request: Request) -> str:
+    """O mesmo limite por IP do login, para toda rota que confere senha sem sessão."""
+    ip = _ip(request)
+    if not _reservar_tentativa(ip):
+        raise ErroDaApi(429, "Muitas tentativas seguidas. Espere alguns minutos e tente de novo.")
+    return ip
 
 
 @app.post("/api/entrar", tags=["conta"], dependencies=[Depends(conferir_origem)])
 def entrar(dados: Login, request: Request, response: Response, con: sqlite3.Connection = Depends(obter_banco)):
-    ip = request.client.host if request.client else "?"
-    if not _reservar_tentativa(ip):
-        raise ErroDaApi(429, "Muitas tentativas seguidas. Espere alguns minutos e tente de novo.")
+    """Entra e abre a sessão (cookie). Senha provisória ou termos sem aceite: 403, sem cookie, com
+    campo "senhaProvisoria" (use /api/definir-senha) ou "termos" (use /api/aceitar-termos)."""
+    ip = _sem_excesso_de_tentativas(request)
     usuario, erro = seguranca.validar_login(con, dados.email, dados.senha)
     if erro:
         raise ErroDaApi(401, erro)
-    _devolver_tentativa(ip)
+    _devolver_tentativa(ip)  # a senha estava certa: não conta como erro
+    # Só depois da senha certa: quem é de fora não descobre se a conta é provisória.
+    falta = seguranca.pendencia(usuario)
+    if falta:
+        raise ErroDaApi(403, falta[1], falta[0])
     duracao = seguranca.SESSAO_LONGA_S if dados.manter else seguranca.SESSAO_S
     token = seguranca.abrir_sessao(con, usuario["codigo"], duracao)
     response.set_cookie(COOKIE, token, max_age=duracao, httponly=True,
                         secure=config.cookie_seguro(request.url.scheme == "https"), samesite="strict", path="/")
     return _conta_publica(usuario)
+
+
+class DefinirSenha(BaseModel):
+    email: str = Field(max_length=120)
+    senhaAtual: str = Field(max_length=seguranca.SENHA_MAXIMA)
+    novaSenha: str = Field(max_length=1000)  # acima de 128 a regra responde com a explicação
+    aceitouTermos: bool = False
+
+
+class AceitarTermos(BaseModel):
+    email: str = Field(max_length=120)
+    senha: str = Field(max_length=seguranca.SENHA_MAXIMA)
+    aceito: bool = False
+
+
+def _conta_sem_sessao(request: Request, tarefa) -> dict:
+    """Para as rotas que conferem e-mail e senha sem sessão: limite por IP e as recusas no formato de erro."""
+    ip = _sem_excesso_de_tentativas(request)
+    try:
+        tarefa()
+    except seguranca.Recusa as e:
+        if e.status != 401:
+            _devolver_tentativa(ip)  # a senha estava certa (ou nem foi conferida): não conta como erro
+        raise ErroDaApi(e.status, e.erro, e.campo) from None
+    _devolver_tentativa(ip)
+    return {"ok": True}
+
+
+@app.post("/api/definir-senha", tags=["conta"], dependencies=[Depends(conferir_origem)])
+def definir_senha(dados: DefinirSenha, request: Request, con: sqlite3.Connection = Depends(obter_banco)):
+    """Primeiro acesso (senha provisória): cria a senha da pessoa e anota o aceite dos termos.
+    Não abre sessão: depois, o site chama /api/entrar com a senha nova."""
+    return _conta_sem_sessao(request, lambda: seguranca.definir_senha(
+        con, dados.email, dados.senhaAtual, dados.novaSenha, dados.aceitouTermos))
+
+
+@app.post("/api/aceitar-termos", tags=["conta"], dependencies=[Depends(conferir_origem)])
+def aceitar_termos(dados: AceitarTermos, request: Request, con: sqlite3.Connection = Depends(obter_banco)):
+    """Quem já tem senha própria aceita a versão atual dos termos. Depois, o site chama /api/entrar."""
+    return _conta_sem_sessao(request, lambda: seguranca.aceitar_termos(con, dados.email, dados.senha, dados.aceito))
 
 
 @app.post("/api/sair", tags=["conta"], dependencies=[Depends(conferir_origem)])

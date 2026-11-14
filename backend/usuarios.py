@@ -6,9 +6,12 @@ Uso, da pasta do projeto:
     python -m backend.usuarios desativar email@exemplo.com
     python -m backend.usuarios ativar email@exemplo.com
 
-"criar" cadastra uma conta; "senha" troca a senha de uma conta (e desbloqueia), para quando a
-pessoa esqueceu ou recuperou o acesso no aparelho. As senhas são pedidas sem aparecer na tela.
+"criar" cadastra uma conta; "senha" dá uma senha nova a uma conta (e desbloqueia), para quando a
+pessoa esqueceu a dela. As senhas são pedidas sem aparecer na tela.
 Perfis: administrador, financeiro, almoxarifado, voluntario.
+
+Nos dois casos a senha é PROVISÓRIA: entregue-a pessoalmente. No primeiro acesso, o app pede para a
+pessoa criar a senha dela e aceitar os Termos de uso; até lá, o servidor não abre sessão para ela.
 
 Com o servidor, as contas existem só aqui: o app confere e-mail e senha no servidor e guarda no
 aparelho só uma cópia da conta (sem senha). Por isso, criar contas, trocar senhas esquecidas e
@@ -62,10 +65,12 @@ def main(argumentos: list[str]) -> int:
         if comando == "criar":
             _, nome, email, perfil = argumentos
             seguranca.criar_usuario(con, nome, email, perfil, senha)
-            print(f"Conta criada: {seguranca.normalizar_email(email)} ({perfil}).")
+            print(f"Conta criada: {seguranca.normalizar_email(email)} ({perfil}). A senha é provisória: "
+                  "no primeiro acesso a pessoa cria a dela e aceita os termos.")
         else:
             seguranca.redefinir_senha(con, argumentos[1], senha)
-            print(f"Senha trocada: {seguranca.normalizar_email(argumentos[1])}.")
+            print(f"Senha trocada: {seguranca.normalizar_email(argumentos[1])}. Ela é provisória: "
+                  "no próximo acesso a pessoa cria a dela.")
     except ValueError as e:
         print(e)
         return 1

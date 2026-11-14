@@ -191,6 +191,11 @@
       const peloServidor = await entrarPeloServidor(v.email, v.senha, manter);
       comServidor = !peloServidor.semServidor;
       if (!peloServidor.semServidor) {
+        // Senha certa, mas falta algo: o servidor diz o quê, e a tela certa aparece (como no aparelho).
+        if (peloServidor.campo === 'senhaProvisoria' || peloServidor.campo === 'termos') {
+          provisoria = { email: v.email, senha: v.senha, manter, servidor: true };
+          return irPara(peloServidor.campo === 'senhaProvisoria' ? 'provisoria' : 'termos');
+        }
         if (!peloServidor.ok) { $('a-senha').value = ''; $('a-senha').focus(); return mostrarErro(peloServidor.erro); }
         return abrirApp({ jaPuxado: true });
       }
@@ -201,6 +206,18 @@
         return irPara(r.trocarSenha ? 'provisoria' : 'termos');
       }
       return abrirApp();
+    }
+    if (modo === 'provisoria' && provisoria.servidor) {
+      const r = await definirSenhaPeloServidor(provisoria.email, provisoria.senha, v.nova, aceitou, provisoria.manter);
+      if (!r.ok) return mostrarErro(r.erro);
+      provisoria = null;
+      return abrirApp({ jaPuxado: true });
+    }
+    if (modo === 'termos' && provisoria.servidor) {
+      const r = await aceitarTermosPeloServidor(provisoria.email, provisoria.senha, aceitou, provisoria.manter);
+      if (!r.ok) return mostrarErro(r.erro);
+      provisoria = null;
+      return abrirApp({ jaPuxado: true });
     }
     if (modo === 'provisoria') {
       const r = await trocarSenha(provisoria.email, provisoria.senha, v.nova, provisoria.manter, aceitou);
