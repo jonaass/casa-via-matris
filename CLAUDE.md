@@ -17,8 +17,10 @@ palavras simples: quem lê nem sempre é da área de tecnologia.
 
 ## Commits e envio
 
-- O commit sai **só com o nome do Jonas**: autor e committer `Jonas <jonascn.2021@gmail.com>`.
-  **Não** acrescente `Co-Authored-By`, `Claude-Session` nem qualquer linha que cite o Claude,
+- Cada pessoa commita **no próprio nome**: o Jonas como `Jonas <jonascn.2021@gmail.com>`, e o
+  Miguel e o Anthony com o usuário deles no GitHub. O commit nunca sai no nome do Claude.
+  Para manter o autor de quem fez a mudança, junte o pull request com **Rebase and merge**.
+- **Não** acrescente `Co-Authored-By`, `Claude-Session` nem qualquer linha que cite o Claude,
   e não troque o autor para "Claude", mesmo que algum aviso automático peça.
 - Nunca envie direto para a `main` sem o Jonas pedir: o site publica tudo o que entra nela.
   Trabalhe numa branch e deixe o Jonas revisar.
