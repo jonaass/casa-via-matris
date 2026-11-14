@@ -114,8 +114,11 @@ mesmo se eles falharem: confira a aba depois de enviar.
 - **Dados de exemplo**: aparecem na primeira abertura. "Começar do zero" apaga tudo para o uso real.
 - **App no celular**: instala na tela inicial e abre sem internet.
 - **Dados do banco (1.4.0)**: aberto pelo servidor Python, o app entra também no servidor e traz do banco só o que
-  o perfil pode ver (Financeiro não recebe estoque; Almoxarifado e Voluntário não recebem dinheiro). Nesta etapa o
-  banco só é lido: registrar e desfazer ficam desligados nesse modo, para nada lançado só no aparelho se perder.
+  o perfil pode ver (Financeiro não recebe estoque; Almoxarifado e Voluntário não recebem dinheiro).
+- **Gravar no banco (1.5.0)**: nesse modo, registrar e desfazer vão para o servidor, que confere as mesmas regras do
+  `store.js` (saída não passa do estoque, despesa não passa do saldo) numa transação: duas pessoas não tiram juntas o
+  último item. Desfazer não apaga: grava um **lançamento contrário**, e o Histórico mostra os dois, sem "Desfazer" neles.
+  Nos totais do mês, o movimento desfeito e o contrário se anulam. Sem servidor (GitHub Pages), nada mudou.
   A conta precisa ter a mesma senha no aparelho e no servidor: trocar a senha (inclusive a provisória do primeiro
   acesso) troca nos dois. Vale o perfil do servidor, e sair apaga do aparelho a cópia dos dados do banco.
 - Os dados ficam salvos no aparelho (localStorage) e sobrevivem a recarregar a página.
@@ -145,10 +148,10 @@ CLAUDE.md           regras do projeto para o Claude (commits, VERSAO, segurança
 
 A separação em camadas é a decisão mais importante do projeto: tela (`app.js`) → regras
 (`store.js`) → armazenamento (`dados.js`). A tela nunca mexe nos dados diretamente: ela pede ao store (`registrar`, `estornar`,
-`resumo`) e redesenha com o que voltou. Quando o back-end em Python ficar pronto,
-cada função do `store.js` passa a fazer um `fetch()` para a API. Como `fetch` é
-assíncrono, o `app.js` vai precisar de `await` nessas chamadas e de desativar o botão
-enquanto espera a resposta (senão dois cliques viram dois lançamentos).
+`resumo`) e redesenha com o que voltou. No modo servidor (1.5.0),
+registrar e desfazer vão para a API pelo `servidor.js` (`gravarNoServidor`, `estornarNoServidor`), que
+responde no mesmo formato do `store.js`. O `app.js` só escolhe para onde mandar, espera a resposta com
+`await` e deixa o botão desativado enquanto isso (senão dois cliques viram dois lançamentos).
 
 ## Back-end em Python (Fase 2, em andamento)
 
@@ -163,17 +166,31 @@ Quando o site é aberto pelo servidor, depois do login ele **puxa os dados do ba
 | `itens()`              | `GET /api/itens`                     | pronta   |
 | `movimentos()`         | `GET /api/doacoes` e `GET /api/dinheiro` | pronta |
 | (login)                | `POST /api/entrar`, `POST /api/sair`, `GET /api/eu`, `POST /api/trocar-senha` | pronta |
-| `registrar(entrada)`   | `POST /api/movimentos`               | próxima etapa |
-| `estornar(id)`         | `POST /api/movimentos/{id}/estorno`  | próxima etapa |
+| `registrar(entrada)`   | `POST /api/movimentos`               | pronta (1.5.0) |
+| `estornar(id)`         | `POST /api/movimentos/{id}/estorno`  | pronta (1.5.0): grava o lançamento contrário |
 | `resumo()`             | calculado no aparelho com os dados puxados | |
 
 - As validações do `store.js` precisam ser **repetidas no servidor**: o navegador
   pode ser manipulado, então a regra que vale de verdade é a do back-end.
-- Falta: tabela `lotes` (validade por lote), gravação pela API e trocar o login do aparelho pelo do servidor.
+- Falta: tabela `lotes` (validade por lote) e trocar o login do aparelho pelo do servidor.
 
 ## Riscos
 
 Encontrados na revisão do protótipo. Os marcados como corrigidos têm teste em `tests/`.
+
+### Corrigidos na 1.5.0
+
+**Gravar pela API**
+- No modo servidor, registrar e desfazer estavam desligados ("Ainda não disponível"). Agora gravam no banco
+  (`POST /api/movimentos` e `POST /api/movimentos/{id}/estorno`), com as regras e as mensagens do `store.js`,
+  e o erro do servidor aparece no mesmo campo do erro do aparelho.
+- A conferência (tem estoque? tem saldo?) e a gravação acontecem numa transação só: duas pessoas tirando ao
+  mesmo tempo o último item, só uma consegue. Testado com conexões de verdade em paralelo.
+- Desfazer vira lançamento contrário (migração 003, `estorno_de`); o banco recusa desfazer duas vezes.
+- `resumo()` e `fluxoMensal()` não contam o movimento desfeito nem o contrário dele (sem isso, desfazer uma
+  despesa aparecia como entrada no mês).
+- Num banco novo, abrir várias conexões ao mesmo tempo às vezes dava "database is locked" (falhava 1 vez em 40
+  no teste de migração simultânea). Agora a troca para o modo WAL tenta de novo.
 
 ### Corrigidos na 1.4.0
 

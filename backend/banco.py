@@ -5,6 +5,7 @@ uma espera quando o banco está ocupado. As migrações são os arquivos numerad
 cada uma roda uma vez só, e o número da última fica guardado no próprio banco (user_version).
 """
 import sqlite3
+import time
 from pathlib import Path
 
 from . import config
@@ -19,10 +20,24 @@ def conectar(caminho: Path | None = None) -> sqlite3.Connection:
     # mas cada pedido tem a sua conexão, então nunca há duas threads usando a mesma ao mesmo tempo.
     con = sqlite3.connect(caminho, check_same_thread=False)
     con.row_factory = sqlite3.Row
-    con.execute("PRAGMA foreign_keys = ON")
-    con.execute("PRAGMA journal_mode = WAL")
     con.execute("PRAGMA busy_timeout = 5000")
+    con.execute("PRAGMA foreign_keys = ON")
+    _ligar_wal(con)
     return con
+
+
+def _ligar_wal(con: sqlite3.Connection) -> None:
+    """Liga o modo WAL. Num banco novo, duas conexões abrindo juntas disputam essa troca, e o SQLite
+    não espera (o busy_timeout não vale para ela): responde "database is locked" na hora.
+    Por isso tenta de novo por até uns 5 segundos. Depois da primeira vez o WAL fica gravado no arquivo."""
+    for tentativa in range(100):
+        try:
+            con.execute("PRAGMA journal_mode = WAL")
+            return
+        except sqlite3.OperationalError as erro:
+            if "locked" not in str(erro) or tentativa == 99:
+                raise
+            time.sleep(0.05)
 
 
 def migrar(con: sqlite3.Connection) -> int:

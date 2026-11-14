@@ -8,14 +8,15 @@ fica em http://localhost:8000/docs.
 O servidor entrega os arquivos do site E a API no mesmo endereço. Isso é obrigatório: a CSP
 do app (connect-src 'self') só deixa o site conversar com o próprio endereço.
 
-Nesta primeira etapa a API só LÊ o banco. Gravar (registrar, estornar) é o próximo passo,
-repetindo as regras do js/store.js.
+A API lê o banco e grava movimentações (registrar e desfazer). As regras de gravação ficam em
+movimentos.py e repetem as do js/store.js.
 """
 import os
 import sqlite3
 import time
 from collections import deque
 from contextlib import asynccontextmanager
+from typing import Any
 
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.exceptions import RequestValidationError
@@ -24,7 +25,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from . import banco, config, seguranca
+from . import banco, config, movimentos, seguranca
 
 COOKIE = "vm_sessao"
 
@@ -43,7 +44,7 @@ _DOCS = os.environ.get("VM_DOCS") == "1"
 app = FastAPI(
     title="Casa Via Matris",
     description="API de estoque, doações e finanças. Os nomes dos campos são os mesmos do js/dados.js.",
-    version="0.2.0",
+    version="0.3.0",
     lifespan=_ao_ligar,
     docs_url="/docs" if _DOCS else None,
     redoc_url=None,
@@ -257,49 +258,71 @@ def eu(usuario: sqlite3.Row = Depends(usuario_logado)):
     return _conta_publica(usuario)
 
 
-# As respostas têm os mesmos campos que o js/dados.js guarda, para o site usar sem converter.
-
-def _quantidade(milesimos: int) -> float | int:
-    return milesimos // 1000 if milesimos % 1000 == 0 else milesimos / 1000
-
+# As respostas têm os mesmos campos que o js/dados.js guarda, para o site usar sem converter
+# (as funções que montam cada registro ficam em movimentos.py).
 
 @app.get("/api/itens", tags=["estoque"])
 def listar_itens(_: sqlite3.Row = Depends(exigir("ver_estoque")), con: sqlite3.Connection = Depends(obter_banco)):
     linhas = con.execute("SELECT * FROM itens ORDER BY nome COLLATE NOCASE").fetchall()
-    return [{
-        "codigo": i["codigo"], "nome": i["nome"], "categoria": i["categoria"], "unidade": i["unidade"],
-        "quantidade": _quantidade(i["quantidade_milesimos"]), "minimo": _quantidade(i["minimo_milesimos"]),
-        "validade": i["validade"],
-    } for i in linhas]
+    return [movimentos.item_publico(i) for i in linhas]
 
 
 @app.get("/api/doacoes", tags=["estoque"])
 def listar_doacoes(_: sqlite3.Row = Depends(exigir("ver_estoque")), con: sqlite3.Connection = Depends(obter_banco)):
-    linhas = con.execute("SELECT * FROM doacoes ORDER BY data, criado_em").fetchall()
-    lista = []
-    for m in linhas:
-        mov = {
-            "codigo": m["codigo"], "tipo": m["tipo"], "data": m["data"], "itemId": m["item_codigo"],
-            "quantidade": _quantidade(m["quantidade_milesimos"]), "descricao": m["descricao"],
-            "pessoa": m["pessoa"], "criadoEm": m["criado_em"],
-        }
-        # Só manda a chave quando há valor: o store.js testa 'validadeAnterior' in mov, e um null
-        # apagaria a validade do item ao desfazer.
-        if m["validade_anterior"] is not None:
-            mov["validadeAnterior"] = m["validade_anterior"]
-        if m["criou_item"]:
-            mov["criouItem"] = True
-        lista.append(mov)
-    return lista
+    # rowid no fim: no mesmo dia e no mesmo instante, a ordem em que foram gravadas.
+    linhas = con.execute("SELECT * FROM doacoes ORDER BY data, criado_em, rowid").fetchall()
+    return [movimentos.doacao_publica(m) for m in linhas]
 
 
 @app.get("/api/dinheiro", tags=["financeiro"])
 def listar_dinheiro(_: sqlite3.Row = Depends(exigir("ver_financeiro")), con: sqlite3.Connection = Depends(obter_banco)):
-    linhas = con.execute("SELECT * FROM dinheiro ORDER BY data, criado_em").fetchall()
-    return [{
-        "codigo": m["codigo"], "tipo": m["tipo"], "data": m["data"], "valorCentavos": m["valor_centavos"],
-        "descricao": m["descricao"], "pessoa": m["pessoa"], "criadoEm": m["criado_em"],
-    } for m in linhas]
+    linhas = con.execute("SELECT * FROM dinheiro ORDER BY data, criado_em, rowid").fetchall()
+    return [movimentos.dinheiro_publico(m) for m in linhas]
+
+
+# ---------- gravar: registrar e desfazer ----------
+
+class NovoItem(BaseModel):
+    nome: str | None = Field(None, max_length=1000)
+    categoria: str | None = Field(None, max_length=100)
+    unidade: str | None = Field(None, max_length=1000)
+    minimo: Any = None  # número ou texto ("2,5"); a regra em movimentos.py responde com a explicação
+
+
+class Movimento(BaseModel):
+    """Os mesmos campos que o app manda ao store.registrar(), com o dinheiro já em centavos."""
+    tipo: str | None = Field(None, max_length=40)
+    data: str | None = Field(None, max_length=40)
+    itemId: str | None = Field(None, max_length=100)
+    novoItem: NovoItem | None = None
+    quantidade: Any = None      # número (2.5) ou texto ("2,5")
+    validade: str | None = Field(None, max_length=40)
+    valorCentavos: Any = None   # inteiro: 15000 = R$ 150,00
+    descricao: str | None = Field(None, max_length=1000)  # o servidor corta em 120, como o app
+    pessoa: str | None = Field(None, max_length=1000)     # e em 80
+
+
+@app.post("/api/movimentos", tags=["movimentos"], dependencies=[Depends(conferir_origem)])
+def registrar_movimento(dados: Movimento, usuario: sqlite3.Row = Depends(usuario_logado),
+                        con: sqlite3.Connection = Depends(obter_banco)):
+    """Registra doação, saída de itens, entrada de dinheiro ou despesa, com as regras do store.js.
+    Responde a movimentação gravada e o item como ficou (ou null, para dinheiro).
+    A permissão depende do tipo, por isso é conferida aqui dentro, e não pela rota."""
+    try:
+        return movimentos.registrar(con, usuario["perfil"], dados.model_dump())
+    except movimentos.Recusa as e:
+        raise ErroDaApi(e.status, e.erro, e.campo) from None
+
+
+@app.post("/api/movimentos/{codigo}/estorno", tags=["movimentos"], dependencies=[Depends(conferir_origem)])
+def estornar_movimento(codigo: str, usuario: sqlite3.Row = Depends(usuario_logado),
+                       con: sqlite3.Connection = Depends(obter_banco)):
+    """Desfaz uma movimentação gravando o lançamento contrário (nada é apagado).
+    Pede "desfazer" e poder ver a área (estoque ou financeiro). Desfazer duas vezes responde 409."""
+    try:
+        return movimentos.estornar(con, usuario["perfil"], codigo)
+    except movimentos.Recusa as e:
+        raise ErroDaApi(e.status, e.erro, e.campo) from None
 
 
 @app.api_route("/api/{resto:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"], include_in_schema=False)

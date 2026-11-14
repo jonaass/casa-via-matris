@@ -104,6 +104,16 @@
       typeof m.data === 'string' && Number.isSafeInteger(m.valorCentavos) && m.valorCentavos > 0);
   }
 
+  /*
+   * Com o servidor da casa, desfazer não apaga: grava um lançamento contrário (com estornoDe).
+   * Nos totais do mês, o movimento desfeito e o contrário dele se anulam: nenhum dos dois conta.
+   * Sem servidor não existe estornoDe, e a lista volta igual (o modo local não muda nada).
+   */
+  function semDesfeitos(lista) {
+    const desfeitos = new Set(lista.map((m) => m.estornoDe).filter(Boolean));
+    return desfeitos.size ? lista.filter((m) => !m.estornoDe && !desfeitos.has(m.codigo)) : lista;
+  }
+
   function saldoCentavos() {
     return movimentosDeDinheiro().reduce((total, m) => total + TIPOS[m.tipo].sinal * m.valorCentavos, 0);
   }
@@ -335,12 +345,12 @@
       let saidasMes = 0;
       let doacoesItens = 0;
       let doacoesDinheiro = 0;
-      for (const m of movimentosDeDinheiro()) {
+      for (const m of semDesfeitos(movimentosDeDinheiro())) {
         if (!m.data.startsWith(mes)) continue;
         if (m.tipo === 'entrada_dinheiro') { entradasMes += m.valorCentavos; doacoesDinheiro += 1; }
         if (m.tipo === 'saida_dinheiro') saidasMes += m.valorCentavos;
       }
-      for (const m of movimentosDeEstoque()) {
+      for (const m of semDesfeitos(movimentosDeEstoque())) {
         if (m.tipo === 'doacao_item' && m.data.startsWith(mes)) doacoesItens += 1;
       }
       const itens = itensValidos();
@@ -369,7 +379,7 @@
         ({ ano, mes } = mesAnterior(ano, mes));
       }
       const porChave = new Map(meses.map((m) => [m.chave, m]));
-      for (const m of movimentosDeDinheiro()) {
+      for (const m of semDesfeitos(movimentosDeDinheiro())) {
         const alvo = porChave.get(m.data.slice(0, 7));
         if (!alvo) continue;
         if (m.tipo === 'entrada_dinheiro') alvo.entradas += m.valorCentavos;
