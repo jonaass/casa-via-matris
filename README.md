@@ -3,7 +3,13 @@
 Projeto de extensão (ODS 10): sistema de controle de **estoque, doações e finanças**
 da Casa Via Matris. Funciona no navegador, instala no celular como um app e abre sem internet.
 
-## Versão 1.4
+## Versão 1.5
+
+A 1.5.0, feita pelo **Miguel**, completa a parte principal do back-end. No modo servidor, **registrar e desfazer
+gravam no banco**, com as mesmas regras do `store.js`, numa transação: duas pessoas não tiram juntas o último item.
+Desfazer não apaga mais, grava um **lançamento contrário** (prestação de contas). Também passa a haver **um login só**:
+quem confere a senha é o servidor, e o aparelho guarda só uma cópia da conta, sem senha. O servidor confere ainda a
+**senha provisória** e o **aceite dos termos**. No GitHub Pages, sem servidor, nada muda.
 
 A 1.4.0 junta o **back-end em Python do Anthony** (pasta `backend/`, FastAPI + SQLite): aberto pelo
 servidor, o app puxa os dados do banco depois do login, só o que cada perfil pode ver. No GitHub Pages
@@ -50,12 +56,20 @@ Depois abra http://localhost:8000.
 Testes das regras de negócio (precisa do Node.js):
 
 ```bash
-node --test tests/store.test.js tests/acesso.test.js
+node --test tests/store.test.js tests/acesso.test.js tests/servidor.test.js
 ```
 
 ```bash
 node tests/testar-miguel.js
 ```
+
+Testes do back-end (precisa do Python e de `pip install -r backend/requirements.txt pytest`):
+
+```bash
+python -m pytest backend/tests
+```
+
+Na 1.5.0 são 120 testes do app, 34 do Miguel e 136 do back-end.
 
 Os testes também rodam sozinhos a cada envio, na aba Actions do GitHub. O site é publicado
 mesmo se eles falharem: confira a aba depois de enviar.
@@ -145,10 +159,12 @@ js/backup.js        planilhas: baixar e restaurar
 js/acesso.js        contas, perfis, sessão e registro de atividades
 js/login.js         a tela de acesso
 js/app.js           a tela: troca de página, desenha e responde aos cliques
+js/servidor.js      a ponte com o back-end: login, puxar os dados e gravar no banco
 sw.js               guarda os arquivos para abrir sem internet
 manifest.json       nome e ícones do app instalado
 tests/              testes automáticos
 ferramentas/        gerar ícones e planilhas de teste
+backend/            o servidor em Python (FastAPI + SQLite); veja backend/README.md
 MIGUEL.md           contrato detalhado de dados.js, backup.js e utilitarios.js
 CLAUDE.md           regras do projeto para o Claude (commits, VERSAO, segurança)
 .claude/agents/     agentes do projeto: publicação, testes, acessos, design, back-end e documentação
@@ -181,11 +197,37 @@ Quando o site é aberto pelo servidor, depois do login ele **puxa os dados do ba
 
 - As validações do `store.js` precisam ser **repetidas no servidor**: o navegador
   pode ser manipulado, então a regra que vale de verdade é a do back-end.
-- Falta: tabela `lotes` (validade por lote).
+- Falta: tabela `lotes` (validade por lote), comando para mudar o perfil e publicar o servidor com HTTPS.
 
 ## Riscos
 
 Encontrados na revisão do protótipo. Os marcados como corrigidos têm teste em `tests/`.
+
+### Em aberto, da revisão da 1.5.0 (14/11/2026)
+
+Revisão com os agentes `via-matris-revisor`, `espelho-backend`, `revisor-acessos` (com a skill de segurança) e
+`via-matris-testador`: 290 testes e 127 verificações no navegador passando, nenhum achado alto.
+
+**Médios**
+- **Lançar em dobro:** se o servidor demora mais de 8 s, o app desiste e manda conferir no Histórico, que ainda mostra
+  a cópia antiga; a pessoa registra de novo e o lançamento entra duas vezes (`js/servidor.js`, `ESPERA_MS`).
+- **Login pelo servidor apaga o que foi lançado só no aparelho** (por exemplo, com o servidor desligado e um
+  administrador criado no aparelho). Já acontecia na 1.4.0.
+- **Voluntário recebe nomes de doadores:** `GET /api/doacoes` pede só `ver_estoque` e devolve o histórico com o
+  campo `pessoa`, que fica guardado no aparelho dele, embora ele não tenha a página Histórico.
+- **Sem comando para mudar o perfil** no servidor: a tela manda usar `python -m backend.usuarios`, que só cria,
+  troca senha, desativa e ativa.
+
+**Baixos**
+- Depois de o servidor gravar, uma falha ao guardar a cópia no aparelho é ignorada (o aviso pode mostrar "R$ NaN").
+- As planilhas não guardam o `estornoDe`: restauradas, um "Desfeito" vira lançamento comum.
+- No "Somar" do Estoque, a trava do botão some se a tela redesenha enquanto espera o servidor.
+- O total do mês no Histórico conta o desfeito e o contrário; o painel e o gráfico não contam.
+- Desfazer fora de ordem pode deixar no item a validade de um lote já desfeito (`backend/movimentos.py`).
+- Item criado por uma doação desfeita fica no banco com 0, e o nome dele não pode ser reaproveitado.
+- A API aceita algarismos de outras escritas (como "٣") na quantidade; o `store.js` recusa.
+- Sair não apaga o registro de atividades nem as cópias das contas no aparelho.
+- Quando o servidor recusa a sessão (401), a tela avisa, mas não volta para a entrada.
 
 ### Corrigidos na 1.5.0
 
@@ -343,20 +385,11 @@ Vieram da auditoria de 10/11/2026.
 
 ### Para o back-end (próximas etapas)
 
-- **Desfazer não pode apagar**: hoje o estorno remove o lançamento. Em finanças de uma ONG,
-  o certo é um lançamento contrário (tipo `estorno`), mantendo o histórico para prestar contas.
+Já resolvidos no back-end: desfazer como lançamento contrário e transação contra dois pedidos ao mesmo tempo (1.5.0);
+dinheiro em centavos, fuso de Brasília, erros com campo e a CSP como cabeçalho com `frame-ancestors 'none'` (1.4.0 e 1.5.0).
+Continuam valendo:
+
 - **Quem fez cada lançamento**: o aparelho guarda um registro de atividades, mas ele pode ser alterado por quem mexer no navegador. A auditoria confiável precisa ficar no servidor.
-- **Concorrência**: duas pessoas tirando o último café ao mesmo tempo passam na checagem e o
-  estoque fica negativo. Use transação, ou
-  `UPDATE itens SET quantidade = quantidade - ? WHERE id = ? AND quantidade >= ?`
-  conferindo quantas linhas mudaram.
-- **Dinheiro em Python**: guarde em centavos (`int`) ou `Decimal`, nunca `float`.
-- **Fuso horário**: o servidor deve usar `ZoneInfo("America/Sao_Paulo")`. Em UTC, às 22h
-  de Brasília já seria "amanhã".
 - **Validade por lote**: hoje cada item guarda só a validade mais próxima. Crie a tabela `lotes`.
 - **Saldo por data**: o saldo é checado só no total de hoje; uma despesa lançada com data
   antiga pode deixar um dia passado negativo no extrato.
-- **Erros com campo**: a API deve responder `{ "erro": "...", "campo": "valor" }`, em vez de
-  a tela adivinhar o campo pelo texto da mensagem.
-- **Cabeçalhos HTTP**: mande a CSP como cabeçalho e inclua `frame-ancestors 'none'`
-  (contra clickjacking), que não funciona na tag `<meta>`.
