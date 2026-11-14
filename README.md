@@ -3,6 +3,14 @@
 Projeto de extensão (ODS 10): sistema de controle de **estoque, doações e finanças**
 da Casa Via Matris. Funciona no navegador, instala no celular como um app e abre sem internet.
 
+## Versão 1.6
+
+A 1.6.0 publica o sistema na **Vercel** com um banco **Postgres** (Neon), os dois em São Paulo:
+https://casa-via-matris.vercel.app. Lá, todas as pessoas, em qualquer aparelho, veem e gravam os mesmos
+dados. O back-end continua o mesmo: com a variável `DATABASE_URL` ele usa o Postgres, sem ela o SQLite de sempre
+(veja "Publicar na Vercel" em [backend/README.md](backend/README.md)). O limite de erros de login por IP passou
+para o banco, e os termos mudaram (todos aceitam de novo) para dizer onde os dados ficam.
+
 ## Versão 1.5
 
 A 1.5.0, feita pelo **Miguel**, completa a parte principal do back-end. No modo servidor, **registrar e desfazer
@@ -36,9 +44,12 @@ usados antes eram do protótipo. A primeira versão com acesso é a 1.0.0, corri
 
 ## Versão no ar
 
-https://jonaass.github.io/casa-via-matris/ (atualiza sozinho a cada `git push` na branch `main`)
+- **https://casa-via-matris.vercel.app** (1.6.0, com servidor e banco): todos os aparelhos veem os mesmos dados.
+  As contas são criadas pelo administrador do servidor (`python -m backend.usuarios`, veja backend/README.md).
+- https://jonaass.github.io/casa-via-matris/ (sem servidor): cada aparelho tem as próprias contas e os próprios
+  dados; o que uma pessoa registra não aparece em outro aparelho.
 
-Cada aparelho tem as próprias contas e os próprios dados: o que uma pessoa registra não aparece em outro aparelho.
+Os dois atualizam sozinhos a cada `git push` na branch `main`.
 
 ## Como abrir
 
@@ -69,7 +80,8 @@ Testes do back-end (precisa do Python e de `pip install -r backend/requirements.
 python -m pytest backend/tests
 ```
 
-Na 1.5.0 são 120 testes do app, 34 do Miguel e 136 do back-end.
+Na 1.6.0 são 120 testes do app, 34 do Miguel e 138 do back-end, e os do back-end rodam também num Postgres
+no GitHub Actions.
 
 Os testes também rodam sozinhos a cada envio, na aba Actions do GitHub. O site é publicado
 mesmo se eles falharem: confira a aba depois de enviar.

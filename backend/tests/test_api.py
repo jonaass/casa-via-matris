@@ -988,3 +988,14 @@ def test_traducao_do_sql_para_o_postgres():
     usuarios = next(c for c in comandos if c.startswith("CREATE TABLE usuarios"))
     assert "bloqueado_ate   DOUBLE PRECISION" in usuarios
     assert banco._sql_da_migracao(script, postgres=False) == banco._comandos(script)
+
+
+def test_nul_no_texto_nao_derruba_o_pedido(cliente):
+    """O Postgres recusa texto com o caractere NUL: ele sai antes de gravar (nos dois bancos)."""
+    assert entrar(cliente, "administrador").status_code == 200
+    r = cliente.post("/api/movimentos", headers=ORIGEM, json={
+        "tipo": "entrada_dinheiro", "data": date.today().isoformat(), "valorCentavos": 100,
+        "descricao": "a\u0000b", "pessoa": "x\u0000y"})
+    assert r.status_code == 200 and r.json()["movimento"]["descricao"] == "ab"
+    assert cliente.post("/api/entrar", json={"email": "a\u0000@teste.com", "senha": "x" * 10},
+                        headers=ORIGEM).status_code == 401

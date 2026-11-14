@@ -68,7 +68,8 @@ def data_valida(valor) -> bool:
 
 def texto(valor, maximo: int) -> str:
     """Corta espaços sobrando e limita o tamanho, como o texto() do store.js."""
-    return " ".join(str("" if valor is None else valor).split())[:maximo]
+    # O NUL (\x00) sai: o Postgres recusa texto com ele, e não serve para nada num nome ou descrição.
+    return " ".join(str("" if valor is None else valor).replace("\x00", "").split())[:maximo]
 
 
 def _milesimos_de_texto(valor: str) -> int | None:

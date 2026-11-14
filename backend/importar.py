@@ -59,7 +59,7 @@ class LinhaRuim(ValueError):
 
 
 def _texto(valor: str, maximo: int) -> str:
-    texto = " ".join(str(valor or "").split())
+    texto = " ".join(str(valor or "").replace("\x00", "").split())  # o Postgres recusa o NUL
     if texto.startswith("'") and len(texto) > 1 and texto[1] in "=+-@":
         texto = texto[1:]  # o backup.js põe um apóstrofo antes de =, +, - e @ (proteção contra fórmula)
     if len(texto) > maximo:

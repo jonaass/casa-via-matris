@@ -5,8 +5,13 @@
 tests/
 backend/tests/
 backend/dados/
-backend/.env
+backend/.env*
+!backend/.env.example
 ferramentas/
 *.db
 *.db-wal
 *.db-shm
+backups/
+via-matris-*.csv
+*.sqlite
+*.sqlite3

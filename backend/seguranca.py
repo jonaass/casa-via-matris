@@ -59,7 +59,7 @@ def pode(perfil: str, acao: str) -> bool:
 
 
 def normalizar_email(email: str) -> str:
-    return str(email or "").strip().lower()
+    return str(email or "").replace("\x00", "").strip().lower()  # o Postgres recusa o NUL
 
 
 def derivar(senha: str, sal_hex: str, iteracoes: int) -> str:
