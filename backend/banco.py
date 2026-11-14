@@ -91,7 +91,9 @@ class ConexaoPostgres:
     postgres = True
 
     def __init__(self, url: str):
-        self._c = psycopg.connect(url)
+        # prepare_threshold=None: o Neon entrega a conexão por um "pooler" (PgBouncer), que não combina
+        # com os comandos preparados que o psycopg cria sozinho depois de algumas repetições.
+        self._c = psycopg.connect(url, prepare_threshold=None, connect_timeout=10)
 
     def execute(self, sql: str, parametros=()):
         if sql.strip().upper() == "BEGIN IMMEDIATE":
