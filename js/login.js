@@ -3,6 +3,9 @@
  *
  * O app.js só é carregado depois da entrada: sem sessão, nada do painel é desenhado.
  * Sair recarrega a página, o que limpa tudo o que estava na tela.
+ *
+ * Com o servidor da casa, quem confere e-mail e senha é o servidor (servidor.js: entrarPeloServidor).
+ * Sem ele (GitHub Pages, arquivo local), valem as contas do aparelho, como sempre.
  */
 (function () {
   'use strict';
@@ -70,7 +73,12 @@
     },
   };
 
+  // Textos de quem usa o servidor da casa: lá não há código de recuperação nem cadastro no aparelho.
+  const APOIO_ESQUECI_SERVIDOR = 'Peça a quem cuida do servidor da casa uma senha nova. Ela é gerada com o comando ' +
+    'python -m backend.usuarios senha seu@email.com, e você troca no primeiro acesso.';
+
   let modo = 'entrar';
+  let comServidor = false; // o servidor da casa respondeu? (conferido ao abrir e a cada entrada)
   let provisoria = null; // e-mail e senha digitados, guardados até a nova senha ser criada ou os termos aceitos
 
   function mostrarErro(msg) {
@@ -86,12 +94,10 @@
     modo = novo;
     const m = MODOS[novo];
     $('acesso-titulo').textContent = m.titulo;
-    // Com o servidor da casa, o código só troca a senha do aparelho: avisa antes, não depois.
-    const avisoServidor = novo === 'recuperar' && typeof modoServidor === 'function' && modoServidor()
-      ? ' Atenção: o código troca só a senha deste aparelho. Antes, peça a quem cuida do servidor da casa para pôr lá a mesma senha nova; senão o servidor não deixa entrar.'
-      : '';
-    $('acesso-apoio').textContent = m.apoio + avisoServidor;
+    const esqueciNoServidor = novo === 'esqueci' && usaServidor();
+    $('acesso-apoio').textContent = esqueciNoServidor ? APOIO_ESQUECI_SERVIDOR : m.apoio;
     $('a-enviar').textContent = m.botao;
+    $('a-enviar').hidden = esqueciNoServidor; // o código de recuperação é só das contas do aparelho
     $('a-voltar').hidden = !m.voltar;
     $('a-voltar').textContent = m.voltar ?? '';
     $('acesso-guardar').hidden = true;
@@ -123,17 +129,20 @@
     $('a-guardei').focus();
   }
 
+  // Este aparelho usa (ou acabou de encontrar) o servidor da casa?
+  const usaServidor = () => comServidor || (typeof modoServidor === 'function' && modoServidor());
+
   /*
    * Antes de abrir o painel, traz os dados do banco quando o site roda pelo servidor (servidor.js).
    * Sem servidor (GitHub Pages, arquivo local, sem internet), segue direto com os dados do aparelho.
-   * credenciais: e-mail e senha que a pessoa acabou de digitar, para entrar também no servidor.
+   * jaPuxado: o login pelo servidor acabou de trazer os dados; não precisa buscar de novo.
    */
-  async function abrirApp(credenciais = null) {
+  async function abrirApp({ jaPuxado = false } = {}) {
     const atual = contaAtual();
-    const puxado = await puxarDoServidor(credenciais, (credenciais && credenciais.email) || (atual && atual.email));
+    const puxado = jaPuxado ? { ok: true } : await puxarDoServidor(null, atual && atual.email);
     if (!puxado.ok) {
       // O servidor manda: se ele recusou, não abre o painel com dados velhos.
-      sair(false);
+      sair(false, { fecharServidor: !puxado.outraConta });
       document.querySelector('.app').hidden = true;
       $('tela-acesso').hidden = false;
       desenharRecados();
@@ -170,37 +179,40 @@
     }
 
     if (modo === 'primeiro') {
+      // O servidor da casa respondeu depois que esta tela abriu: as contas vêm de lá.
+      if (comServidor) return irPara('entrar');
       const r = await criarAdministrador({ nome: v.nome, email: v.email, senha: v.nova, aceitouTermos: aceitou });
       if (!r.ok) return mostrarErro(r.erro);
-      return mostrarCodigo(r.codigoRecuperacao, () => abrirApp({ email: v.email, senha: v.nova, manter: true }));
+      return mostrarCodigo(r.codigoRecuperacao, () => abrirApp());
     }
     if (modo === 'entrar') {
       const manter = Boolean(v.manter);
+      // Primeiro o servidor da casa: se ele existe, é ele quem decide (a senha do aparelho não vale).
+      const peloServidor = await entrarPeloServidor(v.email, v.senha, manter);
+      comServidor = !peloServidor.semServidor;
+      if (!peloServidor.semServidor) {
+        if (!peloServidor.ok) { $('a-senha').value = ''; $('a-senha').focus(); return mostrarErro(peloServidor.erro); }
+        return abrirApp({ jaPuxado: true });
+      }
       const r = await entrar(v.email, v.senha, manter);
       if (!r.ok) { $('a-senha').value = ''; $('a-senha').focus(); return mostrarErro(r.erro); }
       if (r.trocarSenha || r.aceitarTermos) {
         provisoria = { email: v.email, senha: v.senha, manter };
         return irPara(r.trocarSenha ? 'provisoria' : 'termos');
       }
-      return abrirApp({ email: v.email, senha: v.senha, manter });
+      return abrirApp();
     }
     if (modo === 'provisoria') {
-      // Primeiro confere se o servidor aceita a provisória: se não, nada é trocado e a pessoa não fica presa.
-      const noServidor = await conferirNoServidor(provisoria.email, provisoria.senha);
-      if (!noServidor.ok) return mostrarErro(noServidor.erro);
       const r = await trocarSenha(provisoria.email, provisoria.senha, v.nova, provisoria.manter, aceitou);
       if (!r.ok) return mostrarErro(r.erro);
-      // No servidor, entra com a provisória e troca lá também, para as duas senhas continuarem iguais.
-      const credenciais = { email: provisoria.email, senha: provisoria.senha, novaSenha: v.nova, manter: provisoria.manter };
       provisoria = null;
-      return abrirApp(credenciais);
+      return abrirApp();
     }
     if (modo === 'termos') {
       const r = await aceitarTermos(provisoria.email, provisoria.senha, provisoria.manter, aceitou);
       if (!r.ok) return mostrarErro(r.erro);
-      const credenciais = { email: provisoria.email, senha: provisoria.senha, manter: provisoria.manter };
       provisoria = null;
-      return abrirApp(credenciais);
+      return abrirApp();
     }
     if (modo === 'esqueci') return irPara('recuperar');
     if (modo === 'recuperar') {
@@ -210,7 +222,7 @@
       const email = v.email;
       const senha = v.nova;
       return mostrarCodigo(r.codigoRecuperacao, () => {
-        if (contaAtual()) return abrirApp({ email, senha });
+        if (contaAtual()) return abrirApp();
         provisoria = { email, senha, manter: false };
         return irPara('termos');
       });
@@ -222,17 +234,10 @@
       if (!r.ok) { $('a-senha').value = ''; return mostrarErro(r.erro); }
       return mostrarCodigo(r.codigoRecuperacao, () => voltarAoApp('Código de recuperação trocado.'));
     }
-    const email = contaAtual().email;
-    const r = await trocarSenha(email, v.senha, v.nova);
+    // Com o servidor da casa, a senha existe só lá: troca só lá. Sem ele, troca a do aparelho.
+    const r = modoServidor() ? await trocarSenhaNoServidor(v.senha, v.nova) : await trocarSenha(contaAtual().email, v.senha, v.nova);
     // Aqui não há campo de e-mail: "E-mail ou senha incorretos" confundiria.
     if (!r.ok) return mostrarErro(r.erro === 'E-mail ou senha incorretos.' ? 'A senha atual está incorreta.' : r.erro);
-    // Com os dados vindo do banco, troca no servidor também. Se ele recusar, volta a senha do aparelho,
-    // para as duas continuarem iguais.
-    const noServidor = await trocarSenhaNoServidor(v.senha, v.nova);
-    if (!noServidor.ok) {
-      await trocarSenha(email, v.nova, v.senha);
-      return mostrarErro(noServidor.erro);
-    }
     voltarAoApp('Senha trocada.');
   }
 
@@ -321,24 +326,32 @@
     abrirApp();
     return;
   }
-  // Ninguém logado nesta aba. Não apaga a cópia do banco aqui: outra aba pode estar aberta com uma sessão
-  // só dela (sem "Manter conectado"). Quem entra só recebe a cópia se ela for dele (servidor.js).
-  if (typeof terminarSaidaPendente === 'function') terminarSaidaPendente();
-  try { desenharRecados(); } catch (e) { console.warn(e); } // recados nunca podem impedir a entrada
-  $('tela-acesso').hidden = false;
-  let guarda = false;
-  try { guarda = Boolean(globalThis.localStorage); } catch (e) { /* cookies bloqueados */ }
-  if (!guarda) {
-    form.hidden = true;
-    $('acesso-titulo').textContent = 'Libere o armazenamento';
-    $('acesso-apoio').textContent = problemasDoArmazenamento()[0];
-    return;
+  iniciarEntrada();
+
+  async function iniciarEntrada() {
+    // Ninguém logado nesta aba. Não apaga a cópia do banco aqui: outra aba pode estar aberta com uma sessão
+    // só dela (sem "Manter conectado"). Quem entra só recebe a cópia se ela for dele (servidor.js).
+    if (typeof terminarSaidaPendente === 'function') terminarSaidaPendente();
+    try { desenharRecados(); } catch (e) { console.warn(e); } // recados nunca podem impedir a entrada
+    $('tela-acesso').hidden = false;
+    let guarda = false;
+    try { guarda = Boolean(globalThis.localStorage); } catch (e) { /* cookies bloqueados */ }
+    if (!guarda) {
+      form.hidden = true;
+      $('acesso-titulo').textContent = 'Libere o armazenamento';
+      $('acesso-apoio').textContent = problemasDoArmazenamento()[0];
+      return;
+    }
+    if (!globalThis.crypto?.subtle) {
+      form.hidden = true;
+      $('acesso-titulo').textContent = 'Abra pelo endereço seguro';
+      $('acesso-apoio').textContent = 'Este navegador só permite entrar por um endereço https. Abra o site pelo link oficial.';
+      return;
+    }
+    // Com o servidor da casa, as contas vêm de lá: nunca oferece "Crie a conta do administrador" do aparelho.
+    // A pergunta é rápida (sem servidor no GitHub Pages ou no arquivo local, nem chega a sair).
+    irPara(temContas() || usaServidor() ? 'entrar' : 'primeiro');
+    comServidor = await servidorNoAr();
+    if (comServidor && modo === 'primeiro') irPara('entrar');
   }
-  if (!globalThis.crypto?.subtle) {
-    form.hidden = true;
-    $('acesso-titulo').textContent = 'Abra pelo endereço seguro';
-    $('acesso-apoio').textContent = 'Este navegador só permite entrar por um endereço https. Abra o site pelo link oficial.';
-    return;
-  }
-  irPara(temContas() ? 'entrar' : 'primeiro');
 })();

@@ -110,6 +110,7 @@ mesmo se eles falharem: confira a aba depois de enviar.
   movimentação vira um cartão, para o valor não ficar escondido à direita.
 - **Acessos** (só Administrador): tabela do que cada perfil vê, cadastro de pessoas, troca de perfil,
   senha provisória e registro de atividades. A tabela é montada das mesmas listas que as regras usam.
+  No modo servidor, o cadastro fica no servidor (`python -m backend.usuarios`) e a página só explica isso.
 - **Backup**: baixa 3 planilhas (estoque, doações, dinheiro) e restaura delas, mesmo depois de editadas no Excel. Avisa quando o último backup tem mais de 7 dias.
 - **Dados de exemplo**: aparecem na primeira abertura. "Começar do zero" apaga tudo para o uso real.
 - **App no celular**: instala na tela inicial e abre sem internet.
@@ -119,8 +120,13 @@ mesmo se eles falharem: confira a aba depois de enviar.
   `store.js` (saída não passa do estoque, despesa não passa do saldo) numa transação: duas pessoas não tiram juntas o
   último item. Desfazer não apaga: grava um **lançamento contrário**, e o Histórico mostra os dois, sem "Desfazer" neles.
   Nos totais do mês, o movimento desfeito e o contrário se anulam. Sem servidor (GitHub Pages), nada mudou.
-  A conta precisa ter a mesma senha no aparelho e no servidor: trocar a senha (inclusive a provisória do primeiro
-  acesso) troca nos dois. Vale o perfil do servidor, e sair apaga do aparelho a cópia dos dados do banco.
+- **Um login só (1.5.0)**: aberto pelo servidor, é o **servidor** que confere e-mail e senha. A conta do aparelho
+  vira uma cópia da conta do servidor (nome, perfil, aceite dos termos), sem senha guardada, e o perfil trocado no
+  servidor vale na próxima abertura. Trocar a senha é só no servidor. As contas são criadas, mudadas e desativadas
+  no servidor (`python -m backend.usuarios`): a página Acessos explica isso e não mostra o cadastro do aparelho.
+  Sem internet, um login novo não entra (a mensagem explica); quem marcou "Manter conectado" continua abrindo com a
+  última cópia. Sair apaga do aparelho a cópia dos dados do banco. Sem servidor (GitHub Pages), as contas do
+  aparelho funcionam como sempre.
 - Os dados ficam salvos no aparelho (localStorage) e sobrevivem a recarregar a página.
 
 ## Estrutura
@@ -172,7 +178,7 @@ Quando o site é aberto pelo servidor, depois do login ele **puxa os dados do ba
 
 - As validações do `store.js` precisam ser **repetidas no servidor**: o navegador
   pode ser manipulado, então a regra que vale de verdade é a do back-end.
-- Falta: tabela `lotes` (validade por lote) e trocar o login do aparelho pelo do servidor.
+- Falta: tabela `lotes` (validade por lote).
 
 ## Riscos
 
@@ -191,6 +197,13 @@ Encontrados na revisão do protótipo. Os marcados como corrigidos têm teste em
   despesa aparecia como entrada no mês).
 - Num banco novo, abrir várias conexões ao mesmo tempo às vezes dava "database is locked" (falhava 1 vez em 40
   no teste de migração simultânea). Agora a troca para o modo WAL tenta de novo.
+
+**Um login só**
+- No modo servidor, cada pessoa precisava da mesma senha no aparelho e no servidor, e trocar a senha mexia nos dois
+  (e desfazia no aparelho quando o servidor recusava). Agora a senha existe só no servidor: o aparelho guarda uma
+  cópia da conta, sem senha, e o `acesso.js` recusa entrar, trocar senha, cadastrar e mudar contas pelo aparelho.
+- Com duas abas abertas com contas diferentes, a aba que percebia a troca fechava a sessão do servidor e derrubava a
+  outra pessoa. Agora ela só sai do aparelho, e cada aba fica com os dados de quem está nela.
 
 ### Corrigidos na 1.4.0
 

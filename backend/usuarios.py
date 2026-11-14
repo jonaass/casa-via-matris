@@ -10,9 +10,9 @@ Uso, da pasta do projeto:
 pessoa esqueceu ou recuperou o acesso no aparelho. As senhas são pedidas sem aparecer na tela.
 Perfis: administrador, financeiro, almoxarifado, voluntario.
 
-Para o site puxar os dados, a senha do servidor precisa ser a MESMA da conta no aparelho.
-Pessoa nova: crie a conta aqui com a mesma senha provisória que o app mostrou no cadastro;
-no primeiro acesso, o app troca a senha nos dois lugares.
+Com o servidor, as contas existem só aqui: o app confere e-mail e senha no servidor e guarda no
+aparelho só uma cópia da conta (sem senha). Por isso, criar contas, trocar senhas esquecidas e
+desativar quem saiu da equipe é sempre por estes comandos.
 """
 import getpass
 import sys

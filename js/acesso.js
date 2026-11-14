@@ -11,6 +11,11 @@
  * pessoas acolhidas.
  *
  * As contas ficam na "config" do dados.js. Assim não vão para as planilhas de backup.
+ *
+ * Com o servidor da casa (servidor.js), quem decide quem entra é o SERVIDOR: a conta do aparelho vira
+ * uma cópia da conta do servidor (espelharContaDoServidor), sem senha guardada, e criar contas, gerar
+ * senhas e trocar perfis acontece só no servidor (python -m backend.usuarios). Sem servidor (GitHub
+ * Pages, arquivo local), as contas do aparelho funcionam como sempre.
  */
 (function () {
   'use strict';
@@ -73,6 +78,11 @@
   const ERRO_LOGIN = 'E-mail ou senha incorretos.';
 
   const falha = (erro) => ({ ok: false, erro });
+  // Este aparelho usa o servidor da casa? (servidor.js; nos testes sem ele, não.)
+  const noServidor = () => typeof modoServidor === 'function' && modoServidor();
+  const SO_NO_SERVIDOR = 'Com o servidor da casa, as contas ficam no servidor: quem cuida dele cria contas, ' +
+    'gera senhas e muda perfis com o comando python -m backend.usuarios.';
+  const SENHA_NO_SERVIDOR = 'Com o servidor da casa, a senha é conferida e trocada só no servidor.';
   const contas = () => { const c = lerConfig().contas; return Array.isArray(c) ? c : []; };
   const normalizar = (email) => String(email ?? '').trim().toLocaleLowerCase('pt-BR');
   const emailValido = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && email.length <= 120;
@@ -144,6 +154,13 @@
 
   function abrirSessao(conta, manter) {
     sair(false);
+    gravarSessao(conta, manter);
+  }
+
+  // Só grava a sessão deste aparelho. (abrirSessao também sai do servidor; aqui não, porque quem chama
+  // acabou de entrar nele.)
+  function gravarSessao(conta, manter) {
+    sessaoGuardada().forEach((espaco) => espaco.removeItem(CHAVE_SESSAO));
     const onde = manter ? espaco('localStorage') : (espaco('sessionStorage') ?? espaco('localStorage'));
     onde.setItem(CHAVE_SESSAO, JSON.stringify({
       // Sempre depois do último "Sair", mesmo no mesmo milissegundo: senão ela já nasceria encerrada.
@@ -198,16 +215,20 @@
     return podeVerPagina(nome) ? { pagina: nome } : { pagina: 'sem-permissao', pedida: nome };
   }
 
-  /** Sair encerra a sessão em todas as abas deste aparelho, não só nesta. */
-  function sair(registrar = true) {
+  /**
+   * Sair encerra a sessão em todas as abas deste aparelho, não só nesta.
+   * fecharServidor: false quando a sessão do servidor é de outra pessoa (outra aba): ela continua dentro.
+   */
+  function sair(registrar = true, { fecharServidor = true } = {}) {
     if (registrar && contaAtual()) registrarAuditoria('Saiu do sistema');
     sessaoGuardada().forEach((espaco) => espaco.removeItem(CHAVE_SESSAO));
     if (registrar) salvarConfig({ saidaEm: Date.now() });
-    if (typeof sairDoServidor === 'function') sairDoServidor();
+    if (fecharServidor && typeof sairDoServidor === 'function') sairDoServidor();
   }
 
   /** Primeira abertura neste aparelho: quem chega primeiro cria o administrador. */
   async function criarAdministrador({ nome, email, senha, aceitouTermos = false }) {
+    if (noServidor()) return falha(SO_NO_SERVIDOR);
     if (contas().length) return falha('Este aparelho já tem um administrador.');
     const erro = erroDosDados({ nome, email, perfil: 'administrador' }) ?? erroDaSenha(senha) ?? (aceitouTermos === true ? null : ERRO_TERMOS);
     if (erro) return falha(erro);
@@ -254,6 +275,11 @@
       return falha(ERRO_LOGIN);
     }
     if ((conta.bloqueadoAte ?? 0) > Date.now()) return falha(erroDeBloqueio(conta.bloqueadoAte, conta));
+    // Cópia de conta do servidor: não tem senha no aparelho, então não entra por aqui.
+    if (!conta.senha) {
+      await derivar(String(senha ?? ''), '00'.repeat(16), ITERACOES);
+      return falha(ERRO_LOGIN);
+    }
     if (!(await confere(String(senha ?? ''), conta.senha))) {
       return contarErro(conta) ? falha(erroDeBloqueio(Date.now() + BLOQUEIO_MS, conta)) : falha(ERRO_LOGIN);
     }
@@ -269,6 +295,7 @@
 
   /** { ok: true, conta } | { ok: true, trocarSenha: true } | { ok: true, aceitarTermos: true } | { ok: false, erro } */
   async function entrar(email, senha, manter = false) {
+    if (noServidor()) return falha(SENHA_NO_SERVIDOR);
     const r = await validar(email, senha);
     if (!r.ok) return r;
     const salvo = limparTentativas(r.conta);
@@ -285,6 +312,7 @@
    * No primeiro acesso (senha provisória), a pessoa também precisa aceitar os termos.
    */
   async function trocarSenha(email, atual, nova, manter = false, aceitouTermos = false) {
+    if (noServidor()) return falha(SENHA_NO_SERVIDOR);
     const erro = erroDaSenha(nova);
     if (erro) return falha(erro);
     if (nova === atual) return falha('A senha nova precisa ser diferente da atual.');
@@ -302,6 +330,7 @@
 
   /** Quem já tem conta e ainda não aceitou esta versão dos termos. Confere a senha de novo. */
   async function aceitarTermos(email, senha, manter = false, aceitou = false) {
+    if (noServidor()) return falha(SENHA_NO_SERVIDOR);
     if (aceitou !== true) return falha(ERRO_TERMOS);
     const r = await validar(email, senha);
     if (!r.ok) return r;
@@ -316,6 +345,7 @@
 
   /** Só para administrador, com o código guardado na criação. O código usado é trocado por outro. */
   async function recuperarSenha(email, codigoInformado, nova) {
+    if (noServidor()) return falha(SO_NO_SERVIDOR);
     const erro = erroDaSenha(nova);
     if (erro) return falha(erro);
     const conta = contas().find((c) => c.email === normalizar(email) && c.perfil === 'administrador' && c.ativo);
@@ -349,6 +379,7 @@
   async function novoCodigoDeRecuperacao(senhaAtual) {
     const atual = contaAtual();
     if (!atual || !pode('administrar')) return semPermissao();
+    if (noServidor()) return falha(SO_NO_SERVIDOR);
     const r = await validar(atual.email, senhaAtual);
     if (!r.ok) return r;
     limparTentativas(r.conta);
@@ -357,6 +388,40 @@
     if (!salvo.ok) return falha(salvo.erros[0]);
     registrarAuditoria('Gerou novo código de recuperação');
     return { ok: true, codigoRecuperacao };
+  }
+
+  // ---------- conta do servidor ----------
+
+  /**
+   * Cria ou atualiza, pelo e-mail, a cópia da conta do servidor (GET /api/eu): nome, perfil, termos.
+   * Não guarda senha: no modo servidor quem confere a senha é o servidor. A senha que uma conta antiga
+   * do aparelho tinha fica parada (não é usada enquanto o aparelho estiver ligado ao servidor).
+   * Devolve { ok: true, conta } ou { ok: false, erro }.
+   */
+  function espelharContaDoServidor(eu) {
+    const email = normalizar(eu && eu.email);
+    if (!emailValido(email) || !PERFIS[eu.perfil]) return falha('O servidor mandou uma conta inválida. Tente de novo.');
+    const lista = contas();
+    const antiga = lista.find((c) => c.email === email);
+    const termosEm = eu.termosEm || (antiga && aceitouOsTermos(antiga) ? antiga.termos.em : new Date().toISOString());
+    const conta = {
+      senha: null, codigo: gerarCodigo(), criadoEm: new Date().toISOString(), ...antiga,
+      nome: String(eu.nome || email).trim().slice(0, 80), email, perfil: eu.perfil, ativo: true, provisoria: false,
+      tentativas: 0, bloqueadoAte: 0, espelho: true,
+      // O servidor só deixa entrar quem aceitou a versão atual dos termos (a mesma deste arquivo).
+      termos: { versao: TERMOS_VERSAO, em: termosEm },
+    };
+    const salvo = gravar(antiga ? lista.map((c) => (c === antiga ? conta : c)) : [...lista, conta]);
+    return salvo.ok ? { ok: true, conta } : salvo;
+  }
+
+  /** Depois que o servidor aceitou e-mail e senha: atualiza a cópia da conta e abre a sessão do aparelho. */
+  function abrirSessaoDoServidor(eu, manter = false) {
+    const r = espelharContaDoServidor(eu);
+    if (!r.ok) return r;
+    gravarSessao(r.conta, manter);
+    registrarAuditoria('Entrou no sistema', 'pelo servidor da casa');
+    return { ok: true, conta: publica(r.conta) };
   }
 
   // ---------- administração ----------
@@ -371,6 +436,7 @@
   /** Cadastra a pessoa com uma senha provisória, mostrada uma vez só. */
   async function criarConta({ nome, email, perfil }) {
     if (!pode('administrar')) return semPermissao();
+    if (noServidor()) return falha(SO_NO_SERVIDOR);
     const erro = erroDosDados({ nome, email, perfil });
     if (erro) return falha(erro);
     const senhaProvisoria = aoAcaso(12);
@@ -390,6 +456,7 @@
   /** Gera nova senha provisória e tira o bloqueio: é a saída para quem esqueceu a senha. */
   async function redefinirSenhaDe(codigo) {
     if (!pode('administrar')) return semPermissao();
+    if (noServidor()) return falha(SO_NO_SERVIDOR);
     const conta = contas().find((c) => c.codigo === codigo);
     if (!conta) return falha('Essa conta não existe mais.');
     if (conta.codigo === contaAtual().codigo) return falha('Para mudar a sua senha, use Trocar senha.');
@@ -403,6 +470,7 @@
   /** Muda perfil ou ativa e desativa. Nunca deixa o aparelho sem administrador ativo. */
   function alterarConta(codigo, mudancas) {
     if (!pode('administrar')) return semPermissao();
+    if (noServidor()) return falha(SO_NO_SERVIDOR);
     const lista = contas();
     const conta = lista.find((c) => c.codigo === codigo);
     if (!conta) return falha('Essa conta não existe mais.');
@@ -451,7 +519,7 @@
   }
 
   Object.assign(globalThis, {
-    TERMOS_VERSAO, aceitarTermos,
+    TERMOS_VERSAO, aceitarTermos, espelharContaDoServidor, abrirSessaoDoServidor,
     recadosDaCasa, PERFIS, PAGINAS, podeVerPagina, paginaDoEndereco, SENHA_MINIMA, temContas: () => contas().length > 0, contaAtual, pode, entrar, sair, trocarSenha, recuperarSenha,
     criarAdministrador, novoCodigoDeRecuperacao, listarContas, criarConta, redefinirSenhaDe, alterarConta, lerAuditoria, registrarAuditoria,
   });
