@@ -124,6 +124,8 @@ mesmo se eles falharem: confira a aba depois de enviar.
   vira uma cópia da conta do servidor (nome, perfil, aceite dos termos), sem senha guardada, e o perfil trocado no
   servidor vale na próxima abertura. Trocar a senha é só no servidor. As contas são criadas, mudadas e desativadas
   no servidor (`python -m backend.usuarios`): a página Acessos explica isso e não mostra o cadastro do aparelho.
+  O servidor também confere a **senha provisória** e o **aceite dos termos**: conta nova (ou com senha gerada pelo
+  comando) cria a senha dela no primeiro acesso, e quem não aceitou a versão atual dos termos aceita antes de entrar.
   Sem internet, um login novo não entra (a mensagem explica); quem marcou "Manter conectado" continua abrindo com a
   última cópia. Sair apaga do aparelho a cópia dos dados do banco. Sem servidor (GitHub Pages), as contas do
   aparelho funcionam como sempre.
@@ -172,6 +174,7 @@ Quando o site é aberto pelo servidor, depois do login ele **puxa os dados do ba
 | `itens()`              | `GET /api/itens`                     | pronta   |
 | `movimentos()`         | `GET /api/doacoes` e `GET /api/dinheiro` | pronta |
 | (login)                | `POST /api/entrar`, `POST /api/sair`, `GET /api/eu`, `POST /api/trocar-senha` | pronta |
+| `trocarSenha` (provisória), `aceitarTermos` | `POST /api/definir-senha`, `POST /api/aceitar-termos` | pronta (1.5.0) |
 | `registrar(entrada)`   | `POST /api/movimentos`               | pronta (1.5.0) |
 | `estornar(id)`         | `POST /api/movimentos/{id}/estorno`  | pronta (1.5.0): grava o lançamento contrário |
 | `resumo()`             | calculado no aparelho com os dados puxados | |
@@ -204,6 +207,13 @@ Encontrados na revisão do protótipo. Os marcados como corrigidos têm teste em
   cópia da conta, sem senha, e o `acesso.js` recusa entrar, trocar senha, cadastrar e mudar contas pelo aparelho.
 - Com duas abas abertas com contas diferentes, a aba que percebia a troca fechava a sessão do servidor e derrubava a
   outra pessoa. Agora ela só sai do aparelho, e cada aba fica com os dados de quem está nela.
+
+**Senha provisória e termos no servidor**
+- O servidor não conhecia a senha provisória nem o aceite dos termos (só o aparelho conferia). Agora a migração 003
+  guarda os dois, `POST /api/entrar` recusa (403, sem cookie) quando falta algum, e sessões abertas deixam de valer.
+  Contas novas e senhas geradas pelo comando são provisórias; contas antigas aceitam os termos na próxima entrada.
+- Testes: `tests/servidor.test.js` passou de 11 para 30 testes (gravar, desfazer, login pelo servidor, duas abas,
+  servidor fora do ar, senha provisória e termos), e o back-end de 50 para 136.
 
 ### Corrigidos na 1.4.0
 

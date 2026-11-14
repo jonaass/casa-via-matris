@@ -27,8 +27,10 @@ def con(tmp_path, monkeypatch):
     _erros_por_ip.clear()
     c = banco.abrir_banco()
     # Poucas iterações só para o teste ser rápido; contas de verdade usam 600 mil.
+    # Contas prontas para entrar: senha própria (não provisória) e termos aceitos.
     for perfil in seguranca.PERFIS:
-        seguranca.criar_usuario(c, perfil.title(), f"{perfil}@teste.com", perfil, SENHA, iteracoes=1000)
+        seguranca.criar_usuario(c, perfil.title(), f"{perfil}@teste.com", perfil, SENHA, iteracoes=1000,
+                                provisoria=False, aceitou_termos=True)
     importar.importar_arquivos(c, sorted(PLANILHAS.glob("via-matris-*-teste.csv")))
     yield c
     c.close()
@@ -195,6 +197,8 @@ def test_comando_cria_conta_e_redefine_senha(con, monkeypatch, capsys):
     assert usuarios.main(["senha", "cli@teste.com"]) == 0
     usuario, erro = seguranca.validar_login(con, "cli@teste.com", "outra-cli-5678")
     assert erro is None and usuario["perfil"] == "financeiro"
+    # As duas senhas do comando são provisórias, e a conta nova ainda não aceitou os termos.
+    assert usuario["provisoria"] == 1 and usuario["termos_versao"] is None
     assert usuarios.main(["criar", "x"]) == 1  # uso errado mostra a ajuda
 
 
@@ -739,14 +743,220 @@ def test_migracao_003_em_banco_que_ja_tem_contas_e_movimentos(tmp_path):
               " VALUES ('m1', 'doacao_item', '2026-01-01', 'a', 5000, '2026-01-01T00:00:00Z')")
     c.execute("INSERT INTO dinheiro (codigo, tipo, data, valor_centavos, descricao, criado_em)"
               " VALUES ('m2', 'entrada_dinheiro', '2026-01-01', 900, 'Pix', '2026-01-01T00:00:00Z')")
+    g = seguranca.nova_senha_guardada(SENHA, 1000)
+    c.execute("INSERT INTO usuarios (codigo, nome, email, perfil, senha_sal, senha_iteracoes, senha_hash, criado_em)"
+              " VALUES ('u1', 'Antiga', 'antiga@teste.com', 'administrador', ?, ?, ?, '2026-01-01')",
+              (g["sal"], g["iteracoes"], g["hash"]))
     c.commit()
-    seguranca.criar_usuario(c, "Antiga", "antiga@teste.com", "administrador", SENHA, iteracoes=1000)
 
     assert banco.migrar(c) >= 3
     m1 = c.execute("SELECT * FROM doacoes WHERE codigo = 'm1'").fetchone()
     assert m1["estorno_de"] is None and m1["guardou_validade"] == 0 and m1["quantidade_milesimos"] == 5000
-    assert c.execute("SELECT COUNT(*) FROM usuarios").fetchone()[0] == 1
+    antiga = c.execute("SELECT * FROM usuarios WHERE codigo = 'u1'").fetchone()
+    # A conta antiga não é provisória, mas ainda não aceitou os termos: aceita na próxima entrada.
+    assert antiga["provisoria"] == 0 and antiga["termos_versao"] is None and antiga["termos_em"] is None
+    assert seguranca.pendencia(antiga) == ("termos", seguranca.ERRO_FALTAM_TERMOS)
     # E o que entrou funciona: desfazer o movimento antigo grava o contrário.
     movimentos.estornar(c, "administrador", "m2")
     assert c.execute("SELECT estorno_de FROM dinheiro WHERE estorno_de IS NOT NULL").fetchone()[0] == "m2"
     c.close()
+
+
+# ---------- senha provisória e aceite dos termos no servidor (1.5.0) ----------
+
+def nova_conta(con, email="nova@teste.com", provisoria=True, aceitou_termos=False, perfil="almoxarifado"):
+    seguranca.criar_usuario(con, "Nova", email, perfil, SENHA, iteracoes=1000,
+                            provisoria=provisoria, aceitou_termos=aceitou_termos)
+    return email
+
+
+def entrar_email(cliente, email, senha=SENHA):
+    return cliente.post("/api/entrar", json={"email": email, "senha": senha}, headers=ORIGEM)
+
+
+def definir(cliente, email, atual=SENHA, nova="senha-da-pessoa-1", aceitou=True):
+    return cliente.post("/api/definir-senha", headers=ORIGEM,
+                        json={"email": email, "senhaAtual": atual, "novaSenha": nova, "aceitouTermos": aceitou})
+
+
+def aceitar(cliente, email, senha=SENHA, aceito=True):
+    return cliente.post("/api/aceitar-termos", json={"email": email, "senha": senha, "aceito": aceito}, headers=ORIGEM)
+
+
+def test_termos_versao_igual_ao_acesso_js():
+    if shutil.which("node") is None:
+        pytest.skip("precisa do Node.js")
+    script = (
+        "globalThis.lerConfig=()=>({});globalThis.salvarConfig=()=>({ok:true});"
+        f"require({json.dumps(str(RAIZ / 'js' / 'acesso.js'))});console.log(TERMOS_VERSAO);"
+    )
+    saida = subprocess.run(["node", "-e", script], capture_output=True, text=True, check=True).stdout.strip()
+    assert saida == seguranca.TERMOS_VERSAO
+
+
+def test_conta_nova_e_provisoria_e_sem_termos_por_padrao(con):
+    nova_conta(con, provisoria=True)
+    seguranca.criar_usuario(con, "Padrão", "padrao@teste.com", "voluntario", SENHA, iteracoes=1000)
+    linha = con.execute("SELECT provisoria, termos_versao FROM usuarios WHERE email = 'padrao@teste.com'").fetchone()
+    assert tuple(linha) == (1, None)
+
+
+def test_login_com_senha_provisoria_e_recusado_sem_cookie(cliente, con):
+    email = nova_conta(con)
+    r = entrar_email(cliente, email)
+    assert r.status_code == 403
+    assert r.json() == {"erro": seguranca.ERRO_PROVISORIA, "campo": "senhaProvisoria"}
+    assert "set-cookie" not in r.headers and cliente.cookies.get("vm_sessao") is None
+    assert cliente.get("/api/eu").status_code == 401
+
+
+def test_provisoria_so_aparece_com_a_senha_certa(cliente, con):
+    email = nova_conta(con)
+    r = entrar_email(cliente, email, "senha-errada-000")
+    assert r.status_code == 401 and r.json() == {"erro": seguranca.ERRO_LOGIN}
+
+
+@pytest.mark.parametrize("versao", [None, "2020-01-01"])
+def test_login_sem_termos_ou_com_versao_antiga_e_recusado(cliente, con, versao):
+    email = nova_conta(con, provisoria=False)
+    with con:
+        con.execute("UPDATE usuarios SET termos_versao = ? WHERE email = ?", (versao, email))
+    r = entrar_email(cliente, email)
+    assert r.status_code == 403 and r.json() == {"erro": seguranca.ERRO_FALTAM_TERMOS, "campo": "termos"}
+    assert "set-cookie" not in r.headers
+
+
+def test_sessao_aberta_deixa_de_valer_sem_os_termos(cliente, con):
+    """Como o contaAtual() do acesso.js: termos novos derrubam a sessão, e a pessoa aceita ao entrar de novo."""
+    entrar(cliente, "voluntario")
+    assert cliente.get("/api/eu").status_code == 200
+    with con:
+        con.execute("UPDATE usuarios SET termos_versao = '2020-01-01' WHERE email = 'voluntario@teste.com'")
+    assert cliente.get("/api/eu").status_code == 401
+    with con:
+        con.execute("UPDATE usuarios SET termos_versao = ?, provisoria = 1 WHERE email = 'voluntario@teste.com'",
+                    (seguranca.TERMOS_VERSAO,))
+    assert cliente.get("/api/itens").status_code == 401  # provisória também não vale como sessão
+
+
+def test_definir_senha_no_primeiro_acesso(cliente, con):
+    email = nova_conta(con)
+    r = definir(cliente, email)
+    assert r.status_code == 200 and r.json() == {"ok": True}
+    assert "set-cookie" not in r.headers  # não abre sessão: o site entra depois, normalmente
+    linha = con.execute("SELECT * FROM usuarios WHERE email = ?", (email,)).fetchone()
+    assert linha["provisoria"] == 0 and linha["termos_versao"] == seguranca.TERMOS_VERSAO
+    assert linha["termos_em"].endswith("+00:00")  # hora em UTC
+    assert entrar_email(cliente, email).status_code == 401  # a provisória não vale mais
+    r = entrar_email(cliente, email, "senha-da-pessoa-1")
+    assert r.status_code == 200 and r.json()["termosVersao"] == seguranca.TERMOS_VERSAO
+    assert cliente.get("/api/eu").json()["termosEm"] == linha["termos_em"]
+
+
+@pytest.mark.parametrize("corpo, status, campo", [
+    ({"atual": "senha-errada-000"}, 401, "senhaAtual"),
+    ({"nova": "curta"}, 400, "novaSenha"),
+    ({"nova": SENHA}, 400, "novaSenha"),
+    ({"aceitou": False}, 400, "aceitouTermos"),
+])
+def test_definir_senha_recusada_nao_muda_nada(cliente, con, corpo, status, campo):
+    email = nova_conta(con)
+    antes = dict(con.execute("SELECT * FROM usuarios WHERE email = ?", (email,)).fetchone())
+    r = definir(cliente, email, **corpo)
+    assert r.status_code == status and r.json()["campo"] == campo
+    depois = dict(con.execute("SELECT * FROM usuarios WHERE email = ?", (email,)).fetchone())
+    for chave in ("senha_hash", "provisoria", "termos_versao"):
+        assert antes[chave] == depois[chave]
+
+
+def test_definir_senha_so_para_conta_provisoria(cliente, con):
+    r = definir(cliente, "voluntario@teste.com")
+    assert r.status_code == 409 and "já tem senha própria" in r.json()["erro"]
+    assert entrar(cliente, "voluntario").status_code == 200  # a senha não mudou
+
+
+def test_definir_senha_com_termos_ja_aceitos_nao_pede_de_novo(cliente, con):
+    email = nova_conta(con, provisoria=True, aceitou_termos=True)  # "senha" do comando numa conta antiga
+    assert definir(cliente, email, aceitou=False).status_code == 200
+    assert entrar_email(cliente, email, "senha-da-pessoa-1").status_code == 200
+
+
+def test_definir_senha_fecha_sessoes_antigas(con):
+    email = nova_conta(con)
+    codigo = con.execute("SELECT codigo FROM usuarios WHERE email = ?", (email,)).fetchone()[0]
+    seguranca.abrir_sessao(con, codigo)
+    seguranca.definir_senha(con, email, SENHA, "senha-da-pessoa-1", True, iteracoes=1000)
+    assert con.execute("SELECT COUNT(*) FROM sessoes WHERE usuario_codigo = ?", (codigo,)).fetchone()[0] == 0
+
+
+def test_aceitar_termos_e_entrar(cliente, con):
+    email = nova_conta(con, provisoria=False)
+    assert entrar_email(cliente, email).json()["campo"] == "termos"
+    r = aceitar(cliente, email)
+    assert r.status_code == 200 and "set-cookie" not in r.headers
+    assert entrar_email(cliente, email).status_code == 200
+
+
+def test_aceitar_termos_recusado(cliente, con):
+    email = nova_conta(con, provisoria=False)
+    r = aceitar(cliente, email, aceito=False)
+    assert r.status_code == 400 and r.json() == {"erro": seguranca.ERRO_TERMOS, "campo": "aceito"}
+    r = aceitar(cliente, email, senha="senha-errada-000")
+    assert r.status_code == 401 and r.json() == {"erro": seguranca.ERRO_LOGIN, "campo": "senha"}
+    provisoria = nova_conta(con, email="prov@teste.com")
+    r = aceitar(cliente, provisoria)
+    assert r.status_code == 409 and r.json()["campo"] == "senhaProvisoria"
+    assert entrar_email(cliente, email).json()["campo"] == "termos"  # nada foi aceito
+
+
+def test_definir_senha_e_aceitar_termos_pedem_o_proprio_site(cliente, con):
+    email = nova_conta(con)
+    corpo = {"email": email, "senhaAtual": SENHA, "novaSenha": "senha-da-pessoa-1", "aceitouTermos": True}
+    assert cliente.post("/api/definir-senha", json=corpo, headers={"Origin": "https://outro.example"}).status_code == 403
+    assert cliente.post("/api/aceitar-termos", json={"email": email, "senha": SENHA, "aceito": True}).status_code == 403
+
+
+def test_definir_senha_conta_para_o_bloqueio_e_o_limite_por_ip(cliente, con):
+    from backend import principal
+    email = nova_conta(con)
+    for _ in range(seguranca.MAX_ERROS):
+        definir(cliente, email, atual="senha-errada-000")
+    assert definir(cliente, email).status_code == 401  # bloqueada, nem com a senha certa
+    for i in range(principal.LIMITE_POR_IP):
+        aceitar(cliente, f"x{i}@teste.com", senha="x" * 10)
+    assert aceitar(cliente, "voluntario@teste.com").status_code == 429
+    assert entrar(cliente, "voluntario").status_code == 429  # o limite é o mesmo do login
+
+
+def test_comando_senha_deixa_a_conta_provisoria(con, monkeypatch):
+    from backend import usuarios
+    senhas = iter(["senha-nova-cli-1", "senha-nova-cli-1"])
+    monkeypatch.setattr(usuarios.getpass, "getpass", lambda _: next(senhas))
+    assert usuarios.main(["senha", "voluntario@teste.com"]) == 0
+    linha = con.execute("SELECT provisoria, termos_versao FROM usuarios WHERE email = 'voluntario@teste.com'").fetchone()
+    assert linha["provisoria"] == 1 and linha["termos_versao"] == seguranca.TERMOS_VERSAO
+    r = entrar_email(TestClient(app), "voluntario@teste.com", "senha-nova-cli-1")
+    assert r.status_code == 403 and r.json()["campo"] == "senhaProvisoria"
+
+
+def test_migracao_003_conta_antiga_aceita_os_termos_e_entra(tmp_path, monkeypatch):
+    """Banco da versão 2 com uma conta: depois da 003, a pessoa só entra depois de aceitar os termos."""
+    caminho = tmp_path / "antigo.db"
+    c = banco.conectar(caminho)
+    for arquivo in sorted(banco.PASTA_MIGRACOES.glob("00[12]_*.sql")):
+        for comando in banco._comandos(arquivo.read_text(encoding="utf-8")):
+            c.execute(comando)
+    c.execute("PRAGMA user_version = 2")
+    g = seguranca.nova_senha_guardada(SENHA, 1000)
+    c.execute("INSERT INTO usuarios (codigo, nome, email, perfil, senha_sal, senha_iteracoes, senha_hash, criado_em)"
+              " VALUES ('u1', 'Antiga', 'antiga@teste.com', 'financeiro', ?, ?, ?, '2026-01-01')",
+              (g["sal"], g["iteracoes"], g["hash"]))
+    c.commit()
+    c.close()
+    monkeypatch.setenv("VM_BANCO", str(caminho))
+    _erros_por_ip.clear()
+    with TestClient(app) as cliente:  # "with": o servidor liga e roda as migrações, como de verdade
+        assert entrar_email(cliente, "antiga@teste.com").json()["campo"] == "termos"
+        assert aceitar(cliente, "antiga@teste.com").status_code == 200
+        assert entrar_email(cliente, "antiga@teste.com").status_code == 200
+        assert cliente.get("/api/dinheiro").status_code == 200

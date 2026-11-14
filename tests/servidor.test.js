@@ -16,6 +16,7 @@ let servidorNoAr = true;
 let contaDoServidor = null;
 let pedidos = [];
 let entrarAceita = true;
+let pendencia = null; // 'senhaProvisoria' | 'termos': o que falta para a conta do servidor entrar
 const BANCO_INICIAL = JSON.stringify({
   itens: [{ codigo: 'b1', nome: 'Arroz do banco', categoria: 'Alimentos', unidade: 'kg', quantidade: 2.5, minimo: 1, validade: null }],
   doacoes: [],
@@ -66,7 +67,26 @@ globalThis.fetch = async (caminho, opcoes = {}) => {
     return aceitarGravacao(caminho, corpos[caminho] || {});
   }
   if (caminho === 'api/saude') return json(200, { ok: true, servico: 'casa-via-matris' });
-  if (caminho === 'api/entrar') return entrarAceita ? json(200, { ok: true }) : json(401, { erro: 'E-mail ou senha incorretos.' });
+  if (caminho === 'api/entrar') {
+    if (!entrarAceita) return json(401, { erro: 'E-mail ou senha incorretos.' });
+    if (pendencia === 'senhaProvisoria') return json(403, { erro: 'A senha que você recebeu vale só para o primeiro acesso. Crie a sua senha para continuar.', campo: 'senhaProvisoria' });
+    if (pendencia === 'termos') return json(403, { erro: 'Antes de continuar, leia e aceite os Termos de uso e o Aviso de privacidade.', campo: 'termos' });
+    return json(200, { ok: true });
+  }
+  if (caminho === 'api/definir-senha') {
+    const c = corpos[caminho];
+    if (pendencia !== 'senhaProvisoria') return json(409, { erro: 'Esta conta já tem senha própria. Entre com ela; para mudar, use Trocar senha.' });
+    if (c.novaSenha.length < 8) return json(400, { erro: 'A senha precisa ter pelo menos 8 caracteres.', campo: 'novaSenha' });
+    if (c.aceitouTermos !== true) return json(400, { erro: 'Para continuar, leia e marque que aceita os Termos de uso e o Aviso de privacidade.', campo: 'aceitouTermos' });
+    pendencia = null;
+    return json(200, { ok: true });
+  }
+  if (caminho === 'api/aceitar-termos') {
+    if (pendencia === 'senhaProvisoria') return json(409, { erro: 'Crie a sua senha antes de continuar.', campo: 'senhaProvisoria' });
+    if (corpos[caminho].aceito !== true) return json(400, { erro: 'Para continuar, leia e marque que aceita os Termos de uso e o Aviso de privacidade.', campo: 'aceito' });
+    pendencia = null;
+    return json(200, { ok: true });
+  }
   if (caminho === 'api/sair') return json(200, { ok: true });
   if (caminho === 'api/eu') return contaDoServidor ? json(200, contaDoServidor) : json(401, { erro: 'Sua sessão acabou.' });
   const colecao = caminho.replace('api/', '');
@@ -91,6 +111,7 @@ test.beforeEach(() => {
   pedidos = [];
   entrarAceita = true;
   BANCO = JSON.parse(BANCO_INICIAL);
+  pendencia = null;
   corpos = {};
   recusaDaGravacao = null;
   quedaNaGravacao = false;
@@ -408,4 +429,61 @@ test('duas abas com contas diferentes: uma nunca fica com os dados da outra', as
   } finally {
     trocarDeAba(abaDaAna);
   }
+});
+
+// ---------- senha provisória e termos conferidos pelo servidor (1.5.0) ----------
+
+test('senha provisória no servidor: recusa a entrada sem sessão, e a nova senha resolve e entra', async () => {
+  pendencia = 'senhaProvisoria';
+  const r = await entrarPeloServidor('bia@casa.org', 'provisoria-1');
+  assert.equal(r.ok, false);
+  assert.equal(r.campo, 'senhaProvisoria');
+  assert.equal(contaAtual(), null);
+  assert.equal(modoServidor(), false, 'nada foi puxado');
+
+  const curta = await definirSenhaPeloServidor('bia@casa.org', 'provisoria-1', 'curta', true);
+  assert.equal(curta.ok, false);
+  assert.equal(curta.campo, 'novaSenha');
+  const semAceite = await definirSenhaPeloServidor('bia@casa.org', 'provisoria-1', 'senha-da-bia', false);
+  assert.equal(semAceite.campo, 'aceitouTermos');
+  assert.equal(contaAtual(), null);
+
+  contaDoServidor = { ...conta('bia@casa.org', 'voluntario'), termosVersao: TERMOS_VERSAO, termosEm: '2026-11-14T12:00:00+00:00' };
+  const ok = await definirSenhaPeloServidor('bia@casa.org', 'provisoria-1', 'senha-da-bia', true, false);
+  assert.equal(ok.ok, true);
+  assert.deepEqual(corpos['api/definir-senha'], { email: 'bia@casa.org', senhaAtual: 'provisoria-1', novaSenha: 'senha-da-bia', aceitouTermos: true });
+  assert.deepEqual(corpos['api/entrar'], { email: 'bia@casa.org', senha: 'senha-da-bia', manter: false }, 'entra com a senha nova');
+  assert.equal(contaAtual().email, 'bia@casa.org');
+  assert.equal(contaAtual().termosAceitosEm, '2026-11-14T12:00:00+00:00', 'a data do aceite vem do servidor');
+});
+
+test('termos sem aceite no servidor: aceitar resolve e entra; sem marcar, nada muda', async () => {
+  pendencia = 'termos';
+  const r = await entrarPeloServidor('ana@casa.org', 'senha-1');
+  assert.equal(r.campo, 'termos');
+  assert.equal(contaAtual(), null);
+  const semMarcar = await aceitarTermosPeloServidor('ana@casa.org', 'senha-1', false);
+  assert.equal(semMarcar.campo, 'aceito');
+  assert.equal(contaAtual(), null);
+  const ok = await aceitarTermosPeloServidor('ana@casa.org', 'senha-1', true, true);
+  assert.equal(ok.ok, true);
+  assert.deepEqual(corpos['api/aceitar-termos'], { email: 'ana@casa.org', senha: 'senha-1', aceito: true });
+  assert.equal(corpos['api/entrar'].manter, true);
+  assert.equal(contaAtual().email, 'ana@casa.org');
+});
+
+test('aceitar os termos com a senha ainda provisória é recusado', async () => {
+  pendencia = 'senhaProvisoria';
+  const r = await aceitarTermosPeloServidor('bia@casa.org', 'provisoria-1', true);
+  assert.equal(r.ok, false);
+  assert.equal(r.campo, 'senhaProvisoria');
+  assert.equal(contaAtual(), null);
+});
+
+test('a conexão cai ao criar a senha: mensagem clara, ninguém entra', async () => {
+  pendencia = 'senhaProvisoria';
+  servidorNoAr = false;
+  const r = await definirSenhaPeloServidor('bia@casa.org', 'provisoria-1', 'senha-da-bia', true);
+  assert.equal(r.erro, 'A conexão com o servidor caiu. Tente de novo.');
+  assert.equal(contaAtual(), null);
 });

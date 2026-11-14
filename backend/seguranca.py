@@ -1,7 +1,11 @@
 """Perfis, senhas e sessões do servidor.
 
 Os perfis repetem o PERFIS do js/acesso.js. O teste test_perfis_iguais_ao_acesso_js confere
-se os dois continuam iguais: mudou lá, tem que mudar aqui.
+se os dois continuam iguais: mudou lá, tem que mudar aqui. O mesmo vale para TERMOS_VERSAO
+(test_termos_versao_igual_ao_acesso_js).
+
+O servidor também confere a senha provisória e o aceite dos termos, como o acesso.js:
+conta provisória ou sem o aceite da versão atual não entra nem continua com sessão aberta.
 """
 import hashlib
 import hmac
@@ -32,6 +36,13 @@ SESSAO_S = 8 * 60 * 60            # sessão comum: 8 horas, como a sessão curta
 SESSAO_LONGA_S = 30 * 24 * 60 * 60  # "Manter conectado": 30 dias, como no acesso.js
 
 ERRO_LOGIN = "E-mail ou senha incorretos."
+
+# Versão dos Termos de uso (termos.html). Igual à do js/acesso.js: mudou lá, muda aqui,
+# e todo mundo precisa aceitar de novo na próxima entrada.
+TERMOS_VERSAO = "2026-11-13"
+ERRO_PROVISORIA = "A senha que você recebeu vale só para o primeiro acesso. Crie a sua senha para continuar."
+ERRO_FALTAM_TERMOS = "Antes de continuar, leia e aceite os Termos de uso e o Aviso de privacidade."
+ERRO_TERMOS = "Para continuar, leia e marque que aceita os Termos de uso e o Aviso de privacidade."  # o mesmo do acesso.js
 EMAIL_VALIDO = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")  # a mesma regra do acesso.js
 
 
@@ -70,9 +81,17 @@ def erro_da_senha(senha: str) -> str | None:
     return None
 
 
+def _agora_utc() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
 def criar_usuario(con: sqlite3.Connection, nome: str, email: str, perfil: str, senha: str,
-                  iteracoes: int = ITERACOES) -> str:
-    """Cadastra uma conta e devolve o código dela. Dá ValueError com a explicação se algo não servir."""
+                  iteracoes: int = ITERACOES, provisoria: bool = True, aceitou_termos: bool = False) -> str:
+    """Cadastra uma conta e devolve o código dela. Dá ValueError com a explicação se algo não servir.
+
+    Por padrão a senha é provisória e os termos ainda não foram aceitos: no primeiro acesso, a pessoa
+    cria a senha dela e aceita os termos (POST /api/definir-senha), como no app.
+    """
     nome = " ".join(str(nome or "").split())[:80]
     email = normalizar_email(email)
     if not nome:
@@ -90,10 +109,10 @@ def criar_usuario(con: sqlite3.Connection, nome: str, email: str, perfil: str, s
     codigo = secrets.token_hex(8)
     with con:
         con.execute(
-            "INSERT INTO usuarios (codigo, nome, email, perfil, senha_sal, senha_iteracoes, senha_hash, criado_em)"
-            " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            (codigo, nome, email, perfil, g["sal"], g["iteracoes"], g["hash"],
-             datetime.now(timezone.utc).isoformat()),
+            "INSERT INTO usuarios (codigo, nome, email, perfil, senha_sal, senha_iteracoes, senha_hash, criado_em,"
+            " provisoria, termos_versao, termos_em) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (codigo, nome, email, perfil, g["sal"], g["iteracoes"], g["hash"], _agora_utc(), int(bool(provisoria)),
+             TERMOS_VERSAO if aceitou_termos else None, _agora_utc() if aceitou_termos else None),
         )
     return codigo
 
@@ -143,6 +162,64 @@ def validar_login(con: sqlite3.Connection, email: str, senha: str,
     return usuario, None
 
 
+def pendencia(usuario: sqlite3.Row) -> tuple[str, str] | None:
+    """O que falta para a conta entrar: ("senhaProvisoria", msg), ("termos", msg) ou None."""
+    if usuario["provisoria"]:
+        return "senhaProvisoria", ERRO_PROVISORIA
+    if usuario["termos_versao"] != TERMOS_VERSAO:
+        return "termos", ERRO_FALTAM_TERMOS
+    return None
+
+
+class Recusa(Exception):
+    """Pedido de conta recusado. status: 400 (dado), 401 (senha), 409 (situação da conta)."""
+
+    def __init__(self, status: int, erro: str, campo: str | None = None):
+        super().__init__(erro)
+        self.status, self.erro, self.campo = status, erro, campo
+
+
+def definir_senha(con: sqlite3.Connection, email: str, atual: str, nova: str, aceitou_termos: bool,
+                  iteracoes: int = ITERACOES) -> None:
+    """Primeiro acesso: troca a senha provisória pela da pessoa e anota o aceite dos termos.
+    Confere a senha atual com o mesmo bloqueio do login. Dá Recusa se algo não servir.
+    Como no acesso.js (trocarSenha): conta provisória sem o aceite da versão atual precisa aceitar agora."""
+    erro = erro_da_senha(nova)
+    if erro:
+        raise Recusa(400, erro, "novaSenha")
+    if nova == atual:
+        raise Recusa(400, "A senha nova precisa ser diferente da atual.", "novaSenha")
+    usuario, erro = validar_login(con, email, atual)
+    if erro:
+        raise Recusa(401, erro, "senhaAtual")
+    if not usuario["provisoria"]:
+        raise Recusa(409, "Esta conta já tem senha própria. Entre com ela; para mudar, use Trocar senha.")
+    if usuario["termos_versao"] != TERMOS_VERSAO and aceitou_termos is not True:
+        raise Recusa(400, ERRO_TERMOS, "aceitouTermos")
+    g = nova_senha_guardada(nova, iteracoes)
+    with con:
+        con.execute("UPDATE usuarios SET senha_sal = ?, senha_iteracoes = ?, senha_hash = ?, provisoria = 0 WHERE codigo = ?",
+                    (g["sal"], g["iteracoes"], g["hash"], usuario["codigo"]))
+        if aceitou_termos is True:
+            con.execute("UPDATE usuarios SET termos_versao = ?, termos_em = ? WHERE codigo = ?",
+                        (TERMOS_VERSAO, _agora_utc(), usuario["codigo"]))
+        con.execute("DELETE FROM sessoes WHERE usuario_codigo = ?", (usuario["codigo"],))
+
+
+def aceitar_termos(con: sqlite3.Connection, email: str, senha: str, aceito: bool) -> None:
+    """Quem já tem senha própria e ainda não aceitou esta versão dos termos. Confere a senha de novo."""
+    if aceito is not True:
+        raise Recusa(400, ERRO_TERMOS, "aceito")
+    usuario, erro = validar_login(con, email, senha)
+    if erro:
+        raise Recusa(401, erro, "senha")
+    if usuario["provisoria"]:
+        raise Recusa(409, "Crie a sua senha antes de continuar.", "senhaProvisoria")
+    with con:
+        con.execute("UPDATE usuarios SET termos_versao = ?, termos_em = ? WHERE codigo = ?",
+                    (TERMOS_VERSAO, _agora_utc(), usuario["codigo"]))
+
+
 def trocar_senha(con: sqlite3.Connection, email: str, atual: str, nova: str,
                  manter_sessao: str | None = None, iteracoes: int = ITERACOES) -> str | None:
     """Troca a senha conferindo a atual (com o mesmo bloqueio do login). Devolve None ou a mensagem de erro.
@@ -165,7 +242,8 @@ def trocar_senha(con: sqlite3.Connection, email: str, atual: str, nova: str,
 
 
 def redefinir_senha(con: sqlite3.Connection, email: str, nova: str, iteracoes: int = ITERACOES) -> None:
-    """Para quem cuida do servidor: troca a senha sem pedir a atual, desbloqueia e fecha as sessões."""
+    """Para quem cuida do servidor: troca a senha sem pedir a atual, desbloqueia e fecha as sessões.
+    A senha nova é provisória: no próximo acesso, a pessoa cria a dela (como o "Gerar senha" do app)."""
     erro = erro_da_senha(nova)
     if erro:
         raise ValueError(erro)
@@ -175,7 +253,7 @@ def redefinir_senha(con: sqlite3.Connection, email: str, nova: str, iteracoes: i
     g = nova_senha_guardada(nova, iteracoes)
     with con:
         con.execute("UPDATE usuarios SET senha_sal = ?, senha_iteracoes = ?, senha_hash = ?, tentativas = 0,"
-                    " bloqueado_ate = 0 WHERE codigo = ?", (g["sal"], g["iteracoes"], g["hash"], usuario["codigo"]))
+                    " bloqueado_ate = 0, provisoria = 1 WHERE codigo = ?", (g["sal"], g["iteracoes"], g["hash"], usuario["codigo"]))
         con.execute("DELETE FROM sessoes WHERE usuario_codigo = ?", (usuario["codigo"],))
 
 
@@ -198,9 +276,10 @@ def usuario_da_sessao(con: sqlite3.Connection, token: str | None) -> sqlite3.Row
     if not token:
         return None
     return con.execute(
+        # Como o contaAtual() do acesso.js: provisória ou sem o aceite da versão atual não vale como sessão.
         "SELECT u.* FROM sessoes s JOIN usuarios u ON u.codigo = s.usuario_codigo"
-        " WHERE s.token_hash = ? AND s.expira_em > ? AND u.ativo = 1",
-        (_hash_do_token(token), time.time()),
+        " WHERE s.token_hash = ? AND s.expira_em > ? AND u.ativo = 1 AND u.provisoria = 0 AND u.termos_versao = ?",
+        (_hash_do_token(token), time.time(), TERMOS_VERSAO),
     ).fetchone()
 
 
