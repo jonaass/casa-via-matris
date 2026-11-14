@@ -465,8 +465,11 @@
         <section id="usuarios" class="painel" aria-labelledby="titulo-usuarios">
           <div class="painel-cabeca">
             <h2 id="titulo-usuarios">Pessoas com acesso</h2>
-            <p class="painel-ajuda">Cadastre quem usa o sistema neste aparelho. A pessoa recebe uma senha provisória e
+            <p class="painel-ajuda" id="contas-aparelho-ajuda">Cadastre quem usa o sistema neste aparelho. A pessoa recebe uma senha provisória e
               cria a própria senha no primeiro acesso.</p>
+            <p class="painel-ajuda" id="contas-servidor" hidden>Com o servidor da casa, as contas ficam no servidor, e não
+              neste aparelho. Quem cuida do servidor cria contas, gera senhas provisórias, muda perfis e desativa quem saiu
+              da equipe com o comando <code>python -m backend.usuarios</code> (o passo a passo está em backend/README.md).</p>
           </div>
           <ul class="contas" id="lista-contas"></ul>
           <div class="senha-gerada" id="senha-gerada" role="status" hidden>
@@ -474,7 +477,7 @@
             <p class="acesso-codigo" id="senha-gerada-valor"></p>
             <button type="button" class="botao-fantasma" id="senha-gerada-fechar" aria-describedby="senha-gerada-texto senha-gerada-valor">Já anotei</button>
           </div>
-          <h3 class="subtitulo">Liberar acesso para uma pessoa</h3>
+          <h3 class="subtitulo" id="titulo-liberar">Liberar acesso para uma pessoa</h3>
           <form id="form-conta" class="form-conta" novalidate>
             <div class="campo"><label for="c-nome">Nome</label><input id="c-nome" name="nome" maxlength="80" autocomplete="off"></div>
             <div class="campo"><label for="c-email">E-mail</label><input id="c-email" name="email" type="email" maxlength="120" autocomplete="off"></div>

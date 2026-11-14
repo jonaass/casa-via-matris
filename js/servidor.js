@@ -4,9 +4,10 @@
  * Como funciona:
  *   - No GitHub Pages ou abrindo o index.html direto, não existe servidor: nada muda, o app
  *     segue só com os dados do aparelho, como sempre.
- *   - Quando o site é aberto pelo servidor (python -m uvicorn backend.principal:app), depois do
- *     login o app entra também no servidor, busca as coleções que o perfil pode ver e grava no
- *     aparelho pelo dados.js (substituirColecao). A tela continua lendo do dados.js, então o
+ *   - Quando o site é aberto pelo servidor (python -m uvicorn backend.principal:app), é o SERVIDOR
+ *     que confere e-mail e senha (entrarPeloServidor). A conta do aparelho vira uma cópia da conta do
+ *     servidor (nome, perfil, termos), sem senha guardada. Depois, o app busca as coleções que o perfil
+ *     pode ver e grava no aparelho pelo dados.js (substituirColecao). A tela continua lendo do dados.js, então o
  *     app.js e o store.js não mudam, e o app abre sem internet com a última cópia puxada.
  *   - Vale o perfil do servidor: a pessoa só vê e faz o que os dois perfis (aparelho e servidor) deixam.
  *   - Ao sair, a cópia dos dados do banco é apagada do aparelho; quem entrar depois recebe os dados dela.
@@ -59,49 +60,55 @@
     return !Array.isArray(pode) || !pode.includes(acao);
   }
 
-  // O servidor responde igual para senha errada, conta bloqueada ou desativada (não revela nada a quem é de fora).
-  const MSG_SENHA_DIFERENTE = 'O servidor da casa não aceitou esta entrada. A senha precisa ser a mesma no aparelho e no servidor, ' +
-    'e a conta do servidor pode estar bloqueada por tentativas erradas (espere 15 minutos) ou desativada. ' +
-    'Se continuar, peça a quem cuida do servidor da casa para conferir a sua conta.';
+  const MSG_FORA_DO_AR = 'Não foi possível falar com o servidor da casa, e é ele que confere a senha. ' +
+    'Confira a internet e tente de novo em instantes.';
+  const MSG_CONEXAO_CAIU = 'A conexão com o servidor caiu. Tente de novo.';
 
+  // O servidor responde igual para senha errada, conta bloqueada ou desativada (não revela nada a quem é de fora).
   async function entrarNoServidor(email, senha, manter = false) {
     const r = await pedir('api/entrar', { method: 'POST', body: JSON.stringify({ email, senha, manter: Boolean(manter) }) });
     if (r.status === 200) return { ok: true };
-    // A senha já foi aceita no aparelho: se o servidor recusou com 401, as duas senhas estão diferentes.
-    const erro = r.corpo && r.corpo.erro;
-    return falha(r.status === 401 && erro === 'E-mail ou senha incorretos.' ? MSG_SENHA_DIFERENTE : erro || 'O servidor recusou a entrada.');
+    return { ...falha((r.corpo && r.corpo.erro) || 'O servidor recusou a entrada.'), campo: (r.corpo && r.corpo.campo) || null };
   }
 
   /**
-   * Troca a senha no servidor (quem chama troca a do aparelho também). Sem servidor, não faz nada.
-   * Devolve { ok: true } ou { ok: false, erro }.
+   * Login com o servidor da casa: ele confere e-mail e senha, o app puxa os dados e a conta do aparelho
+   * vira a cópia da conta do servidor (acesso.js: abrirSessaoDoServidor). A senha não fica no aparelho.
+   * Devolve { ok: true }, { ok: false, erro, campo } ou { ok: false, semServidor: true } quando não há
+   * servidor e o aparelho nunca usou um (GitHub Pages, arquivo local): aí vale a conta do aparelho.
+   */
+  async function entrarPeloServidor(email, senha, manter = false) {
+    if (!(await temServidor())) {
+      // Aparelho que já usa o servidor: sem ele, ninguém novo entra (a senha não fica no aparelho).
+      return modoServidor() ? falha(MSG_FORA_DO_AR) : { ok: false, semServidor: true };
+    }
+    let entrou;
+    try {
+      entrou = await entrarNoServidor(email, senha, manter);
+    } catch (e) {
+      return falha(MSG_CONEXAO_CAIU);
+    }
+    if (!entrou.ok) return entrou;
+    salvarConfig({ sairPendente: false }); // a sessão antiga do servidor foi trocada pela nova
+    const puxado = await puxarDoServidor(null, email);
+    if (!puxado.ok) return puxado;
+    return abrirSessaoDoServidor(puxado.conta, manter);
+  }
+
+  /** O servidor da casa responde agora? (A tela de entrada usa para escolher os textos.) */
+  const servidorNoAr = () => temServidor();
+
+  /**
+   * No modo servidor, a senha existe só no servidor: trocar é só lá. Devolve { ok: true } ou { ok: false, erro, campo }.
    */
   async function trocarSenhaNoServidor(atual, nova) {
-    if (!modoServidor()) return { ok: true };
-    // Sem resposta do servidor, trocar só no aparelho deixaria as duas senhas diferentes.
+    if (!modoServidor()) return falha('Este aparelho não está ligado ao servidor da casa.');
     if (!(await temServidor())) return falha('Não foi possível falar com o servidor da casa. A senha não foi trocada; tente de novo quando houver conexão.');
     try {
       const r = await pedir('api/trocar-senha', { method: 'POST', body: JSON.stringify({ senhaAtual: atual, novaSenha: nova }) });
       if (r.status === 200) return { ok: true };
       if (r.status === 401) return falha('Sua sessão no servidor acabou. Saia e entre de novo para trocar a senha.');
-      return falha((r.corpo && r.corpo.erro) || 'O servidor não trocou a senha. Tente de novo.');
-    } catch (e) {
-      return falha('A conexão com o servidor caiu. Tente de novo.');
-    }
-  }
-
-  /**
-   * Antes de trocar a senha provisória no aparelho: o servidor aceita esta conta com a provisória?
-   * Se não aceitar, nada muda em lugar nenhum (antes, o aparelho trocava e a pessoa ficava presa).
-   * Sem servidor (GitHub Pages), responde { ok: true }.
-   */
-  async function conferirNoServidor(email, senha) {
-    if (!(await temServidor())) return { ok: true };
-    try {
-      const r = await entrarNoServidor(email, senha);
-      if (r.ok) return r;
-      return falha('A sua conta ainda não está pronta no servidor da casa com esta senha provisória. ' +
-        'Peça ao administrador para conferir; nada foi trocado.');
+      return { ...falha((r.corpo && r.corpo.erro) || 'O servidor não trocou a senha. Tente de novo.'), campo: (r.corpo && r.corpo.campo) || null };
     } catch (e) {
       return falha('A conexão com o servidor caiu. Tente de novo.');
     }
@@ -122,9 +129,9 @@
   /**
    * Entra no servidor (se vierem e-mail e senha) e traz os dados do banco para o aparelho.
    * Sem credenciais, usa a sessão do servidor que já estiver aberta (cookie).
-   * credenciais.novaSenha: primeiro acesso com senha provisória; entra com a provisória e troca no servidor.
+   * A cada vez, a conta do aparelho é atualizada com a do servidor (nome e perfil podem ter mudado lá).
    * Devolve { ok: true, servidor: false } quando não há servidor (nada muda),
-   * { ok: true, servidor: true } quando puxou, ou { ok: false, servidor: true, erro }.
+   * { ok: true, servidor: true, conta } quando puxou, ou { ok: false, servidor: true, erro }.
    */
   async function puxarDoServidor(credenciais = null, email = '') {
     email = String(email || (credenciais && credenciais.email) || '').trim().toLowerCase();
@@ -142,10 +149,6 @@
         const entrou = await entrarNoServidor(credenciais.email, credenciais.senha, credenciais.manter);
         if (!entrou.ok) return entrou;
         salvarConfig({ sairPendente: false }); // a sessão antiga foi trocada pela nova
-        if (credenciais.novaSenha) {
-          const r = await pedir('api/trocar-senha', { method: 'POST', body: JSON.stringify({ senhaAtual: credenciais.senha, novaSenha: credenciais.novaSenha }) });
-          if (r.status !== 200) return falha((r.corpo && r.corpo.erro) || 'O servidor não trocou a senha.');
-        }
       }
       const eu = await pedir('api/eu');
       if (eu.status === 401) return falha('Entre de novo para atualizar os dados do banco.');
@@ -154,14 +157,20 @@
       // ela é de outra conta. Nunca grava aqui os dados de outra pessoa.
       if (email && String(eu.corpo.email || '').toLowerCase() !== email) {
         limparCopia();
-        return falha('O servidor está com a sessão de outra conta (talvez em outra aba). Entre de novo.');
+        // outraConta: quem chama sai só do aparelho. Fechar a sessão do servidor derrubaria a outra pessoa.
+        return { ...falha('O servidor está com a sessão de outra conta (talvez em outra aba). Entre de novo.'), outraConta: true };
       }
 
       const puxado = await puxarColecoes(eu.corpo.pode);
       if (!puxado.ok) return puxado;
       // "iniciado" impede o store.js de colocar os dados de exemplo por cima do banco vazio.
       salvarConfig({ iniciado: true, servidor: { ativo: true, dono: String(eu.corpo.email || '').toLowerCase(), perfil: eu.corpo.perfil, pode: eu.corpo.pode, atualizadoEm: new Date().toISOString() } });
-      return { ok: true, servidor: true };
+      // A conta do aparelho segue a do servidor (perfil trocado lá vale aqui na próxima abertura).
+      if (typeof espelharContaDoServidor === 'function') {
+        const espelho = espelharContaDoServidor(eu.corpo);
+        if (!espelho.ok) return falha(espelho.erro);
+      }
+      return { ok: true, servidor: true, conta: eu.corpo };
     } catch (e) {
       console.warn('Não foi possível puxar os dados do banco.', e);
       return falha('A conexão com o servidor caiu. Tente de novo.');
@@ -293,5 +302,5 @@
     if (lerConfig().sairPendente) fecharSessaoNoServidor();
   }
 
-  Object.assign(globalThis, { gravarNoServidor, estornarNoServidor, modoServidor, limparCopia, copiaDeOutraPessoa, conferirNoServidor, terminarSaidaPendente, bloqueadoPeloServidor, puxarDoServidor, sairDoServidor, trocarSenhaNoServidor });
+  Object.assign(globalThis, { gravarNoServidor, estornarNoServidor, entrarPeloServidor, servidorNoAr, modoServidor, limparCopia, copiaDeOutraPessoa, terminarSaidaPendente, bloqueadoPeloServidor, puxarDoServidor, sairDoServidor, trocarSenhaNoServidor });
 })();

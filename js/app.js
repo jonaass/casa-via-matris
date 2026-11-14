@@ -922,6 +922,8 @@
     $('conta-nome').textContent = conta.nome;
     $('conta-perfil').textContent = PERFIS[perfilEfetivo()].rotulo;
     $('area-admin').hidden = !admin;
+    // O código de recuperação é das contas do aparelho; com o servidor, a senha nova vem de quem cuida dele.
+    $('conta-codigo').hidden = modoServidor();
     $('kpi-saldo-bloco').hidden = !verDinheiro;
     $('kpi-minimo-bloco').hidden = !verEstoque;
     $('kpi-validade-bloco').hidden = !verEstoque;
@@ -1001,6 +1003,11 @@
 
   function desenharContas() {
     if (!pode('administrar')) return;
+    // Com o servidor da casa, as contas são criadas e mudadas lá (python -m backend.usuarios), não aqui.
+    // O acesso.js também recusa; esconder é só para a tela não oferecer o que não funciona.
+    const servidor = modoServidor();
+    ['lista-contas', 'form-conta', 'titulo-liberar', 'contas-aparelho-ajuda'].forEach((id) => { $(id).hidden = servidor; });
+    $('contas-servidor').hidden = !servidor;
     const opcoesPerfil = (atual) => Object.entries(PERFIS).map(([valor, p]) => el('option', { value: valor, selected: valor === atual }, p.rotulo));
     const eu = (c) => c.codigo === conta.codigo;
     $('lista-contas').replaceChildren(...listarContas().map((c) => el('li', { class: 'conta', 'data-codigo': c.codigo },

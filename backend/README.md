@@ -34,24 +34,26 @@ python -m backend.importar via-matris-estoque-2026-11-13.csv via-matris-doacoes-
 python -m uvicorn backend.principal:app --reload
 ```
 
-Abra http://localhost:8000. No primeiro acesso o app pede para criar o administrador **do aparelho**:
-use **o mesmo e-mail e a mesma senha** da conta criada no passo 1. Depois do login, os dados vêm do banco.
+Abra http://localhost:8000 e entre com o e-mail e a senha da conta criada no passo 1. Quem confere é o servidor;
+depois do login, os dados vêm do banco.
 Para ver as rotas em http://localhost:8000/docs, ligue a página com `VM_DOCS=1` no `backend/.env`
 (ela fica desligada por padrão porque carrega scripts de uma CDN).
 
-### Contas: aparelho e servidor com a mesma senha
+### Contas: só no servidor (1.5.0)
 
-Enquanto o login do aparelho não for trocado pelo do servidor, cada pessoa tem as duas contas, com a mesma senha.
+Com o servidor, **um login só**: quem decide quem entra é o servidor. A conta do aparelho é só uma cópia da conta
+do servidor (nome, perfil e aceite dos termos), criada no primeiro login, sem senha guardada.
 
-- **Pessoa nova:** o administrador cadastra a pessoa na página Acessos, e o app mostra uma senha provisória.
-  Crie a conta no servidor com essa mesma senha provisória:
-  `python -m backend.usuarios criar "Nome" email@exemplo.com almoxarifado`.
-  No primeiro acesso, a pessoa cria a senha dela e o app troca nos dois lugares.
-- **Trocar senha** (menu Conta): troca nos dois. Se o servidor recusar, o aparelho volta à senha antiga.
-- **Esqueci a senha / código de recuperação:** muda só no aparelho. O app avisa que a senha do servidor ficou
-  diferente; quem cuida do servidor acerta com `python -m backend.usuarios senha email@exemplo.com`.
+- **Pessoa nova:** `python -m backend.usuarios criar "Nome" email@exemplo.com almoxarifado`. Entregue a senha
+  pessoalmente.
+- **Trocar senha** (menu Conta do app): troca só no servidor.
+- **Esqueci a senha:** `python -m backend.usuarios senha email@exemplo.com`. (O código de recuperação do app é só
+  das contas do aparelho e não aparece no modo servidor.)
 - **Desativar** quem saiu da equipe: `python -m backend.usuarios desativar email@exemplo.com` (e `ativar` para voltar).
-- **Perfil:** vale o do servidor. A pessoa só vê e faz o que os dois perfis deixam.
+- **Perfil:** vale o do servidor; trocou lá, vale no aparelho na próxima abertura.
+- A página Acessos do app, no modo servidor, não cadastra nem muda contas: ela aponta para estes comandos.
+- Sem internet, um login novo não entra (é o servidor que confere a senha). Quem marcou "Manter conectado"
+  continua abrindo, com a última cópia dos dados dele.
 
 O banco fica em `backend/dados/casa-via-matris.db` (fora do Git). Para mudar, veja `.env.example`.
 
@@ -122,7 +124,7 @@ vieram das planilhas ela é 0, e desfazê-los não mexe na validade do item (nã
 ## Próxima etapa
 
 1. (Feito na 1.5.0: gravar pela API.)
-2. Trocar o login do aparelho pelo do servidor (hoje a pessoa precisa da mesma senha nos dois).
+2. (Feito na 1.5.0: um login só, o do servidor.)
 3. Tabela `lotes` para a validade por lote.
 4. Publicar num servidor com https e domínio próprio. Atrás de um proxy (Nginx, Render, Railway...), rode o
    uvicorn com `--proxy-headers`: sem isso o servidor não sabe que o endereço é https (o cookie sai sem `Secure`)
