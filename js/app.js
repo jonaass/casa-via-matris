@@ -340,12 +340,13 @@
     focarNoItem(rapido.codigo, 'input');
   });
 
-  $('lista-itens').addEventListener('submit', (e) => {
+  $('lista-itens').addEventListener('submit', async (e) => {
     e.preventDefault();
     if (conferirSessao() || !rapido) return;
     const formRapido = e.target;
     const { codigo, tipo } = rapido;
-    const r = store.registrar({ tipo, itemId: codigo, quantidade: formRapido.elements.quantidade.value, data: dataDeHoje() });
+    const entrada = { tipo, itemId: codigo, quantidade: formRapido.elements.quantidade.value, data: dataDeHoje() };
+    const r = await comBotaoTravado(formRapido.querySelector('button[type=submit]'), () => registrarMovimento(entrada));
     if (!r.ok) {
       formRapido.querySelector('.erro').textContent = r.erro;
       formRapido.elements.quantidade.setAttribute('aria-invalid', 'true');
@@ -353,7 +354,7 @@
       return;
     }
     const item = store.item(codigo);
-    const detalhe = `${textoDaQuantidade(r.movimento.quantidade, item.unidade)} de ${item.nome}`;
+    const detalhe = `${textoDaQuantidade(r.movimento.quantidade, item?.unidade)} de ${item?.nome ?? 'item'}`;
     rapido = null;
     registrarAuditoria(textosPorTipo[tipo].feito, detalhe);
     atualizarTudo();
@@ -381,6 +382,14 @@
     $('f-quantidade').value = quantidade;
     location.hash = '#/registrar';
   }
+
+  /*
+   * Onde gravar: com o servidor da casa, no banco (servidor.js); sem ele (GitHub Pages, arquivo local),
+   * no aparelho (store.js), como sempre. As regras ficam lá e no servidor, nunca aqui na tela.
+   * As duas respostas têm o mesmo formato: { ok, movimento } ou { ok: false, erro, campo }.
+   */
+  const registrarMovimento = async (entrada) => (modoServidor() ? gravarNoServidor(entrada) : store.registrar(entrada));
+  const desfazerMovimento = async (codigo) => (modoServidor() ? estornarNoServidor(codigo) : store.estornar(codigo));
 
   // ---------- formulário ----------
 
@@ -462,8 +471,16 @@
     }
   }
 
+  // O servidor diz o campo com problema ({ erro, campo }); no aparelho, o campo sai da mensagem.
+  const CAMPOS_DO_SERVIDOR = {
+    quantidade: 'f-quantidade', valorCentavos: 'f-valor', itemId: 'f-item', validade: 'f-validade', data: 'f-data',
+    descricao: 'f-descricao', 'novoItem.nome': 'f-novo-nome', 'novoItem.unidade': 'f-novo-unidade',
+    'novoItem.minimo': 'f-novo-minimo', 'novoItem.categoria': 'f-novo-categoria',
+  };
+
   // Aponta qual campo provavelmente causou o erro, para levar o foco até ele.
-  function campoDoErro(msg) {
+  function campoDoErro(msg, campo = null) {
+    if (campo && CAMPOS_DO_SERVIDOR[campo]) return $(CAMPOS_DO_SERVIDOR[campo]);
     const mapa = [
       [/quantidade|em estoque|saíram/i, 'f-quantidade'],
       [/valor|saldo/i, 'f-valor'],
@@ -487,7 +504,7 @@
   form.addEventListener('input', () => { mexeuDepois = true; });
   form.addEventListener('change', () => { mexeuDepois = true; });
 
-  form.addEventListener('submit', (evento) => {
+  form.addEventListener('submit', async (evento) => {
     evento.preventDefault();
     if (!mexeuDepois && Date.now() - gravouEm < 1500) return;
     // Sessão vencida com a página aberta: volta para a entrada, em vez de dizer "seu perfil não pode".
@@ -515,9 +532,10 @@
       };
     }
 
-    const resultado = store.registrar(entrada);
+    // Botão travado enquanto o servidor responde: dois toques não viram dois lançamentos.
+    const resultado = await comBotaoTravado(form.querySelector('button[type=submit]'), () => registrarMovimento(entrada));
     if (!resultado.ok) {
-      mostrarErro(resultado.erro, campoDoErro(resultado.erro));
+      mostrarErro(resultado.erro, campoDoErro(resultado.erro, resultado.campo));
       return;
     }
 
@@ -596,9 +614,11 @@
   $('aviso').addEventListener('mouseleave', () => { if ($('aviso').classList.contains('visivel')) agendarFechamento(); });
   $('aviso-fechar').addEventListener('click', fecharAviso);
 
-  $('aviso-desfazer').addEventListener('click', () => {
+  $('aviso-desfazer').addEventListener('click', async () => {
     if (!ultimoId || conferirSessao()) return;
-    const r = store.estornar(ultimoId);
+    const codigo = ultimoId;
+    ultimoId = null; // um segundo toque, enquanto o servidor responde, não desfaz de novo
+    const r = await comBotaoTravado($('aviso-desfazer'), () => desfazerMovimento(codigo));
     if (r.ok) registrarAuditoria('Desfez uma movimentação');
     atualizarTudo();
     avisar(r.ok ? 'Movimentação desfeita.' : r.erro);
@@ -644,6 +664,10 @@
     $('historico-total').textContent = `${partes.join(': ')}.`;
 
     const itens = new Map(store.itens().map((i) => [i.codigo, i]));
+    // Com o servidor, desfazer grava um lançamento contrário (estornoDe). Nem o contrário nem o
+    // movimento já desfeito oferecem "Desfazer" de novo (o servidor recusaria).
+    const desfeitos = new Set(visiveis.map((m) => m.estornoDe).filter(Boolean));
+    const podeDesfazer = (m) => !m.estornoDe && !desfeitos.has(m.codigo);
     $('corpo-historico').replaceChildren(...movs.map((m) => {
       const tipo = TIPOS[m.tipo];
       const sinal = tipo.sinal > 0 ? '+' : '−';
@@ -664,7 +688,7 @@
         el('td', { 'data-rotulo': 'Quantidade ou valor', class: `num ${tipo.sinal > 0 ? 'positivo' : 'negativo'}` }, valor),
         // Desfazer discreto (é ação rara); no segundo toque vira um botão de perigo, bem diferente.
         // Movimentação de item que já foi apagado não pode ser desfeita: nem oferece o botão.
-        el('td', { class: 'acao' }, pode('desfazer') && (tipo.area !== 'estoque' || item) && el('button', {
+        el('td', { class: 'acao' }, pode('desfazer') && podeDesfazer(m) && (tipo.area !== 'estoque' || item) && el('button', {
           type: 'button',
           class: pedindoConfirmacao === m.codigo ? 'botao-fantasma perigo' : 'botao-fantasma discreto',
           'data-codigo': m.codigo,
@@ -689,7 +713,7 @@
     desenharHistorico();
   }
 
-  $('corpo-historico').addEventListener('click', (e) => {
+  $('corpo-historico').addEventListener('click', async (e) => {
     const botao = e.target.closest('button[data-codigo]');
     if (!botao || conferirSessao()) return;
     const codigo = botao.dataset.codigo;
@@ -713,7 +737,7 @@
     // Depois de desfazer, o foco vai para o botão da linha seguinte (a linha desfeita some).
     const lista = botoes();
     const proximo = lista[lista.indexOf(botao) + 1]?.dataset.codigo ?? lista[lista.indexOf(botao) - 1]?.dataset.codigo;
-    const r = store.estornar(codigo);
+    const r = await comBotaoTravado(botao, () => desfazerMovimento(codigo));
     if (r.ok) registrarAuditoria('Desfez uma movimentação');
     atualizarTudo();
     avisar(r.ok ? 'Movimentação desfeita.' : r.erro);
@@ -911,7 +935,7 @@
 
     const opcoes = [...form.elements.tipo];
     opcoes.forEach((r) => { r.disabled = !pode(r.value); r.closest('label').hidden = r.disabled; });
-    // Com os dados vindo do banco (servidor.js), nenhuma opção fica liberada: não há o que marcar.
+    // Perfil sem nenhum tipo de registro (não deveria acontecer): não há o que marcar.
     const primeira = opcoes.find((r) => !r.disabled);
     if (primeira) primeira.checked = true;
     form.querySelector('.tipos').dataset.opcoes = String(opcoes.filter((r) => !r.disabled).length);
@@ -927,11 +951,8 @@
     if (conferirSessao()) return;
     const { pagina, pedida } = paginaDoEndereco(location.hash);
     if (pedida) {
-      const somenteLeitura = pedida === 'registrar' && modoServidor();
-      $('t-sem-permissao').textContent = somenteLeitura ? 'Ainda não disponível' : 'Sem permissão';
-      $('sem-permissao-texto').textContent = somenteLeitura
-        ? 'Os dados agora vêm do banco da casa, e registrar por aqui ainda não está disponível. Essa parte chega na próxima versão.'
-        : `A página ${PAGINAS[pedida].rotulo} não faz parte do perfil ${PERFIS[perfilEfetivo()].rotulo}. Se você precisa dela, peça ao administrador.`;
+      $('sem-permissao-texto').textContent =
+        `A página ${PAGINAS[pedida].rotulo} não faz parte do perfil ${PERFIS[perfilEfetivo()].rotulo}. Se você precisa dela, peça ao administrador.`;
     }
     document.querySelectorAll('.pagina').forEach((secao) => { secao.hidden = secao.dataset.pagina !== pagina; });
     document.querySelectorAll('.lateral nav a[data-pagina]').forEach((a) => {

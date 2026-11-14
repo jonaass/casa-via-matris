@@ -393,3 +393,69 @@ test('resumo separa os itens já vencidos', () => {
   assert.ok(r.vencidos.some((i) => i.nome === 'Biscoito'));
   assert.ok(r.vencendo.some((i) => i.nome === 'Biscoito'));
 });
+
+// ---------- lançamento contrário do servidor (1.5.0) ----------
+
+// Como chega do banco: um movimento, o contrário dele (estornoDe) e um movimento comum.
+function dadosComContrario() {
+  const hoje = dataDeHoje();
+  const criado = '2026-01-01T00:00:00.000Z';
+  return {
+    itens: [{ codigo: 'arroz', nome: 'Arroz', categoria: 'Alimentos', unidade: 'kg', quantidade: 5, minimo: 1, validade: null }],
+    doacoes: [
+      { codigo: 'd1', tipo: 'doacao_item', data: hoje, itemId: 'arroz', quantidade: 3, descricao: '', pessoa: 'Feira', criadoEm: criado },
+      { codigo: 'd2', tipo: 'saida_item', data: hoje, itemId: 'arroz', quantidade: 3, descricao: 'Desfeito', pessoa: 'Feira', criadoEm: criado, estornoDe: 'd1' },
+      { codigo: 'd3', tipo: 'doacao_item', data: hoje, itemId: 'arroz', quantidade: 5, descricao: '', pessoa: 'Paróquia', criadoEm: criado },
+    ],
+    dinheiro: [
+      { codigo: 'm1', tipo: 'entrada_dinheiro', data: hoje, valorCentavos: 10000, descricao: 'Bazar', pessoa: 'Bazar', criadoEm: criado },
+      { codigo: 'm2', tipo: 'saida_dinheiro', data: hoje, valorCentavos: 2500, descricao: 'Gás', pessoa: 'Gás', criadoEm: criado },
+      { codigo: 'm3', tipo: 'entrada_dinheiro', data: hoje, valorCentavos: 2500, descricao: 'Desfeito: Gás', pessoa: 'Gás', criadoEm: criado, estornoDe: 'm2' },
+    ],
+  };
+}
+
+function gravarDados(dados) {
+  criarStore(); // marca "iniciado" antes, para os exemplos não entrarem por cima
+  for (const [colecao, lista] of Object.entries(dados)) assert.equal(substituirColecao(colecao, lista).ok, true);
+  return criarStore();
+}
+
+test('resumo ignora o movimento desfeito e o contrário dele (e o saldo continua certo)', () => {
+  const s = gravarDados(dadosComContrario());
+  const r = s.resumo();
+  assert.equal(r.saldoCentavos, 10000);   // 100 − 25 + 25
+  assert.equal(r.entradasMes, 10000);     // o contrário da despesa não conta como entrada
+  assert.equal(r.saidasMes, 0);           // nem a despesa desfeita como saída
+  assert.equal(r.doacoesDinheiro, 1);
+  assert.equal(r.doacoesItens, 1);        // só a d3: a d1 foi desfeita
+});
+
+test('fluxoMensal ignora o movimento desfeito e o contrário dele', () => {
+  const s = gravarDados(dadosComContrario());
+  const mes = s.fluxoMensal(1)[0];
+  assert.equal(mes.entradas, 10000);
+  assert.equal(mes.saidas, 0);
+});
+
+test('modo local (sem servidor): sem estornoDe, resumo e fluxo contam tudo, como antes', () => {
+  const dados = dadosComContrario();
+  for (const lista of [dados.doacoes, dados.dinheiro]) lista.forEach((m) => { delete m.estornoDe; });
+  const s = gravarDados(dados);
+  const r = s.resumo();
+  assert.equal(r.saldoCentavos, 10000);
+  assert.equal(r.entradasMes, 12500);
+  assert.equal(r.saidasMes, 2500);
+  assert.equal(r.doacoesDinheiro, 2);
+  assert.equal(r.doacoesItens, 2);
+  assert.deepEqual(s.fluxoMensal(1).map(({ entradas, saidas }) => ({ entradas, saidas })), [{ entradas: 12500, saidas: 2500 }]);
+});
+
+test('modo local: desfazer continua apagando o movimento, sem lançamento contrário', () => {
+  const s = criarStore();
+  const r = s.registrar({ tipo: 'entrada_dinheiro', valor: '10,00', descricao: 'Rifa' });
+  const antes = s.movimentos().length;
+  assert.equal(s.estornar(r.movimento.codigo).ok, true);
+  assert.equal(s.movimentos().length, antes - 1);
+  assert.ok(s.movimentos().every((m) => !('estornoDe' in m)));
+});

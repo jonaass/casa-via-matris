@@ -10,11 +10,11 @@
  *     app.js e o store.js não mudam, e o app abre sem internet com a última cópia puxada.
  *   - Vale o perfil do servidor: a pessoa só vê e faz o que os dois perfis (aparelho e servidor) deixam.
  *   - Ao sair, a cópia dos dados do banco é apagada do aparelho; quem entrar depois recebe os dados dela.
- *   - Nesta primeira etapa o banco só é LIDO. Por isso, no modo servidor, registrar e desfazer
- *     ficam desligados (o acesso.js consulta modoServidor()): o que fosse lançado só no aparelho
- *     seria apagado na próxima vez que os dados fossem puxados. Gravar no banco é a próxima etapa.
+ *   - Registrar e desfazer vão para o banco (gravarNoServidor, estornarNoServidor): o servidor confere
+ *     as regras, grava e responde; depois o app puxa as coleções de novo. A cópia do aparelho continua
+ *     só leitura (nada é lançado só nela), então nada se perde na próxima vez que os dados forem puxados.
  *
- * Precisa, carregado antes: dados.js. Usado por: acesso.js e login.js.
+ * Precisa, carregados antes: dados.js e store.js. Usado por: acesso.js, login.js e app.js.
  */
 (function () {
   'use strict';
@@ -22,9 +22,6 @@
   const ESPERA_MS = 8000;
   // Coleção do dados.js → permissão que o perfil precisa para recebê-la. Igual às rotas da API.
   const COLECOES = { itens: 'ver_estoque', doacoes: 'ver_estoque', dinheiro: 'ver_financeiro' };
-  // O que fica desligado enquanto o banco só pode ser lido.
-  const ACOES_QUE_GRAVAM = ['doacao_item', 'saida_item', 'entrada_dinheiro', 'saida_dinheiro', 'desfazer'];
-
   const falha = (erro) => ({ ok: false, servidor: true, erro });
 
   // Caminho relativo ("api/..."), para funcionar também se o site for publicado numa subpasta.
@@ -54,12 +51,12 @@
 
   /**
    * No modo servidor, vale o perfil do SERVIDOR: a pessoa só faz o que os dois perfis (aparelho e
-   * servidor) deixam. E ações que gravam ficam desligadas até a API aceitar gravações.
+   * servidor) deixam. (O servidor confere de novo em cada gravação.)
    */
   function bloqueadoPeloServidor(acao) {
     if (!modoServidor()) return false;
     const pode = lerConfig().servidor.pode;
-    return ACOES_QUE_GRAVAM.includes(acao) || !Array.isArray(pode) || !pode.includes(acao);
+    return !Array.isArray(pode) || !pode.includes(acao);
   }
 
   // O servidor responde igual para senha errada, conta bloqueada ou desativada (não revela nada a quem é de fora).
@@ -160,19 +157,8 @@
         return falha('O servidor está com a sessão de outra conta (talvez em outra aba). Entre de novo.');
       }
 
-      // Busca tudo antes de gravar: ou entram as três coleções, ou nenhuma muda.
-      const novas = {};
-      for (const [colecao, permissao] of Object.entries(COLECOES)) {
-        // Coleção que o perfil não pode ver fica vazia neste aparelho, e não com dado de outra pessoa.
-        if (!eu.corpo.pode.includes(permissao)) { novas[colecao] = []; continue; }
-        const r = await pedir(`api/${colecao}`);
-        if (r.status !== 200 || !Array.isArray(r.corpo)) return falha((r.corpo && r.corpo.erro) || 'Não foi possível buscar os dados do banco.');
-        novas[colecao] = r.corpo;
-      }
-      for (const [colecao, lista] of Object.entries(novas)) {
-        const gravado = substituirColecao(colecao, lista);
-        if (!gravado.ok) return falha(gravado.erros[0]);
-      }
+      const puxado = await puxarColecoes(eu.corpo.pode);
+      if (!puxado.ok) return puxado;
       // "iniciado" impede o store.js de colocar os dados de exemplo por cima do banco vazio.
       salvarConfig({ iniciado: true, servidor: { ativo: true, dono: String(eu.corpo.email || '').toLowerCase(), perfil: eu.corpo.perfil, pode: eu.corpo.pode, atualizadoEm: new Date().toISOString() } });
       return { ok: true, servidor: true };
@@ -180,6 +166,89 @@
       console.warn('Não foi possível puxar os dados do banco.', e);
       return falha('A conexão com o servidor caiu. Tente de novo.');
     }
+  }
+
+  /**
+   * Busca as coleções que o perfil pode ver e troca a cópia do aparelho por elas.
+   * Busca tudo antes de gravar: ou entram as três coleções, ou nenhuma muda.
+   */
+  async function puxarColecoes(pode) {
+    const novas = {};
+    for (const [colecao, permissao] of Object.entries(COLECOES)) {
+      // Coleção que o perfil não pode ver fica vazia neste aparelho, e não com dado de outra pessoa.
+      if (!pode.includes(permissao)) { novas[colecao] = []; continue; }
+      const r = await pedir(`api/${colecao}`);
+      if (r.status !== 200 || !Array.isArray(r.corpo)) return falha((r.corpo && r.corpo.erro) || 'Não foi possível buscar os dados do banco.');
+      novas[colecao] = r.corpo;
+    }
+    for (const [colecao, lista] of Object.entries(novas)) {
+      const gravado = substituirColecao(colecao, lista);
+      if (!gravado.ok) return falha(gravado.erros[0]);
+    }
+    return { ok: true };
+  }
+
+  // ---------- gravar no banco ----------
+
+  // Número digitado ("2,5") vira número (2.5). Se não for número, segue o texto: o servidor responde
+  // com a mesma explicação do store.js ("Informe uma quantidade maior que zero.").
+  function numeroOuTexto(valor) {
+    const n = ViaMatris.quantidadeDeTexto(valor ?? '');
+    return Number.isFinite(n) ? n : String(valor ?? '');
+  }
+
+  /** A entrada do formulário (a mesma do store.registrar) no formato da API: dinheiro em centavos. */
+  function corpoDoMovimento(entrada) {
+    const centavos = textoParaCentavos(entrada.valor);
+    const corpo = {
+      tipo: entrada.tipo, data: entrada.data || null, itemId: entrada.itemId || null,
+      quantidade: numeroOuTexto(entrada.quantidade), validade: entrada.validade || null,
+      valorCentavos: Number.isSafeInteger(centavos) ? centavos : null,
+      descricao: entrada.descricao ?? '', pessoa: entrada.pessoa ?? '',
+    };
+    if (entrada.novoItem) {
+      corpo.novoItem = {
+        nome: entrada.novoItem.nome ?? '', categoria: entrada.novoItem.categoria ?? '', unidade: entrada.novoItem.unidade ?? '',
+        minimo: numeroOuTexto(entrada.novoItem.minimo || '0'), // vazio vale 0, como no store.js
+      };
+    }
+    return corpo;
+  }
+
+  /*
+   * Manda a gravação. Deu certo: põe na cópia do aparelho o que o servidor gravou (a tela mostra na hora,
+   * mesmo se a busca seguinte falhar) e puxa as coleções de novo, para trazer também o que outras
+   * pessoas lançaram. Recusado: { ok: false, erro, campo }, com a explicação do servidor.
+   */
+  async function enviarGravacao(caminho, corpo) {
+    let r;
+    try {
+      r = await pedir(caminho, { method: 'POST', body: JSON.stringify(corpo) });
+    } catch (e) {
+      // A resposta pode ter se perdido depois de o servidor gravar: melhor conferir do que lançar duas vezes.
+      return falha('A conexão com o servidor caiu. Confira no Histórico se entrou antes de tentar de novo.');
+    }
+    if (r.status === 401) return falha('Sua sessão no servidor acabou. Saia e entre de novo.');
+    if (r.status !== 200 || !r.corpo || !r.corpo.movimento) {
+      return { ...falha((r.corpo && r.corpo.erro) || 'O servidor não gravou. Tente de novo.'), campo: (r.corpo && r.corpo.campo) || null };
+    }
+    const { movimento, item } = r.corpo;
+    salvarRegistro('valorCentavos' in movimento ? 'dinheiro' : 'doacoes', movimento);
+    if (item) salvarRegistro('itens', item);
+    try {
+      await puxarColecoes(lerConfig().servidor.pode || []);
+    } catch (e) { /* sem conexão agora: a cópia já tem o que foi gravado; o resto vem na próxima vez */ }
+    return { ok: true, movimento };
+  }
+
+  /** Registra no banco (o servidor confere as mesmas regras do store.js). Devolve como o store.registrar. */
+  function gravarNoServidor(entrada) {
+    return enviarGravacao('api/movimentos', corpoDoMovimento(entrada));
+  }
+
+  /** Desfaz no banco: o servidor grava o lançamento contrário. Devolve como o store.estornar. */
+  function estornarNoServidor(codigo) {
+    return enviarGravacao(`api/movimentos/${encodeURIComponent(codigo)}/estorno`, {});
   }
 
   /**
@@ -224,5 +293,5 @@
     if (lerConfig().sairPendente) fecharSessaoNoServidor();
   }
 
-  Object.assign(globalThis, { modoServidor, limparCopia, copiaDeOutraPessoa, conferirNoServidor, terminarSaidaPendente, bloqueadoPeloServidor, puxarDoServidor, sairDoServidor, trocarSenhaNoServidor });
+  Object.assign(globalThis, { gravarNoServidor, estornarNoServidor, modoServidor, limparCopia, copiaDeOutraPessoa, conferirNoServidor, terminarSaidaPendente, bloqueadoPeloServidor, puxarDoServidor, sairDoServidor, trocarSenhaNoServidor });
 })();

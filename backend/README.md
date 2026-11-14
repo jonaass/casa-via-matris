@@ -70,7 +70,9 @@ de lá e daqui ficarem diferentes.
 | --- | --- |
 | `principal.py` | As rotas da API, os cabeçalhos de segurança e os arquivos do site. |
 | `banco.py` | Conexão com o SQLite e migrações. |
-| `migracoes/001_inicial.sql` | As tabelas. Mudança no banco = arquivo novo `002_...sql`, nunca editar o antigo. |
+| `migracoes/001_inicial.sql` | As tabelas. Mudança no banco = arquivo novo, com o próximo número, nunca editar o antigo. |
+| `migracoes/003_estorno_e_termos.sql` | Lançamento contrário (`estorno_de`) e `guardou_validade`. |
+| `movimentos.py` | Registrar e desfazer, com as regras do `store.js`, numa transação. |
 | `seguranca.py` | Perfis (iguais ao `acesso.js`), senhas e sessões. |
 | `importar.py` | Planilhas de backup do app → banco. |
 | `usuarios.py` | Comandos para criar contas e redefinir senhas. |
@@ -85,17 +87,41 @@ de lá e daqui ficarem diferentes.
   é aberto por https. (Em `http://localhost` não pode ser `Secure`: o Safari não guardaria o login.)
 - Trocar a senha confere a atual e fecha as outras sessões da conta. Sair fecha a sessão e apaga do aparelho a
   cópia dos dados do banco, para a próxima pessoa não ficar com os dados de quem saiu.
-- Pedidos que gravam (`entrar`, `sair`, `trocar-senha`) conferem o cabeçalho `Origin` (contra CSRF).
+- Pedidos que gravam (`entrar`, `sair`, `trocar-senha`, `movimentos`) conferem o cabeçalho `Origin` (contra CSRF).
+- Gravar movimentações repete as regras do `store.js` (`movimentos.py`), confere a permissão de cada tipo e faz
+  conferência e gravação numa transação só (`BEGIN IMMEDIATE`). Desfazer grava o lançamento contrário; o índice
+  único em `estorno_de` impede desfazer duas vezes, mesmo com dois pedidos juntos.
 - SQL sempre com parâmetros `?`. SQLite com `foreign_keys`, `WAL` e `busy_timeout`.
 - Dinheiro em centavos e quantidades em milésimos, sempre inteiros.
 - CSP como cabeçalho, com `frame-ancestors 'none'`. Respostas da API sem cache.
 - Só os arquivos do app são entregues: `backend/`, `.git` e o banco nunca saem pelo servidor.
 
+## Gravar: registrar e desfazer (1.5.0)
+
+`POST /api/movimentos` (com sessão e `Origin`). Corpo, com os mesmos nomes do app:
+
+```json
+{ "tipo": "doacao_item", "data": "2026-11-14", "itemId": "arroz", "quantidade": 2.5,
+  "validade": "2027-01-10", "descricao": "", "pessoa": "Paróquia" }
+```
+
+- Item novo (só em doação): troque `itemId` por `"novoItem": {"nome": "...", "categoria": "Alimentos", "unidade": "kg", "minimo": 1}`.
+- Dinheiro: `"valorCentavos": 15000` (inteiro; R$ 150,00) e `descricao` obrigatória.
+- Resposta 200: `{ "movimento": {...}, "item": {...} }` (os mesmos campos de `GET /api/doacoes`, `/api/dinheiro` e
+  `/api/itens`; `item` é `null` para dinheiro). Recusa: `{ "erro": "...", "campo": "quantidade" }` com 422
+  (regra), 403 (perfil) ou 401 (sem sessão).
+
+`POST /api/movimentos/{codigo}/estorno` grava o lançamento contrário (tipo oposto, data de hoje, `estornoDe` com o
+código do original) e devolve no mesmo formato. Pede `desfazer` e poder ver a área. Recusas: 404 (não existe),
+409 (já foi desfeito), 422 (é um lançamento contrário; ou parte dos itens já saiu; ou o dinheiro já foi gasto).
+O item cadastrado por uma doação desfeita continua na tabela, com quantidade 0.
+
+`guardou_validade` (migração 003): 1 quando a validade de antes foi anotada ao gravar pela API. Nos movimentos que
+vieram das planilhas ela é 0, e desfazê-los não mexe na validade do item (não se sabe qual era).
+
 ## Próxima etapa
 
-1. `POST /api/movimentos` (registrar) e `POST /api/movimentos/{id}/estorno`, repetindo as regras do `store.js`
-   (saída não passa do estoque, despesa não passa do saldo, estorno vira lançamento contrário).
-   Aí o `js/servidor.js` religa o registrar no modo servidor.
+1. (Feito na 1.5.0: gravar pela API.)
 2. Trocar o login do aparelho pelo do servidor (hoje a pessoa precisa da mesma senha nos dois).
 3. Tabela `lotes` para a validade por lote.
 4. Publicar num servidor com https e domínio próprio. Atrás de um proxy (Nginx, Render, Railway...), rode o
@@ -109,8 +135,10 @@ de lá e daqui ficarem diferentes.
 
 ## Como foi testado
 
-- `python -m pytest backend/tests`: 50 testes da API, das senhas, da importação e do comando de contas
-  (na 1.4.0 entraram testes de senhas em paralelo, migração simultânea, nome sem acento, origens e caminhos internos).
+- `python -m pytest backend/tests`: testes da API, das senhas, da importação e do comando de contas
+  (na 1.4.0 entraram testes de senhas em paralelo, migração simultânea, nome sem acento, origens e caminhos internos;
+  na 1.5.0, as regras de gravação com as mesmas mensagens do `store.js`, as permissões de cada perfil, o desfazer,
+  a migração 003 num banco com dados e a concorrência: várias conexões tirando juntas as últimas unidades).
 - No navegador (Playwright), 178 verificações em Chromium, Firefox e WebKit, no computador e no tamanho de
   celular: os 4 perfis recebem só o que podem ver, menus e mensagens seguem o perfil do servidor, sair apaga a
   cópia e fecha a sessão, senha provisória, troca de senha (inclusive quando o servidor recusa), esqueci a senha,
