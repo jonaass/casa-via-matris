@@ -1071,7 +1071,7 @@
     ];
   }
 
-  // No servidor, a lista é só para ver: mudar perfil, gerar senha e desativar são feitos pelo comando.
+  // No servidor, a lista mostra as pessoas e gera senha nova; mudar perfil e desativar são feitos pelo comando.
   async function desenharContasDoServidor() {
     const lista = await listarContasDoServidor();
     if (!modoServidor()) return;
@@ -1079,10 +1079,24 @@
       $('lista-contas').replaceChildren(el('li', { class: 'conta' }, 'Não foi possível buscar a lista de pessoas no servidor. Recarregue a página.'));
       return;
     }
-    $('lista-contas').replaceChildren(...lista.map((c) => el('li', { class: 'conta' },
+    $('lista-contas').replaceChildren(...lista.map((c) => el('li', { class: 'conta', 'data-email': c.email },
       el('div', {}, ...dadosDaConta(c)),
       el('div', { class: 'conta-acoes' },
-        el('span', { class: 'conta-eu' }, `${PERFIS[c.perfil] ? PERFIS[c.perfil].rotulo : c.perfil}${c.email === conta.email ? ' (você)' : ''}`)))));
+        el('span', { class: 'conta-eu' }, `${PERFIS[c.perfil] ? PERFIS[c.perfil].rotulo : c.perfil}${c.email === conta.email ? ' (você)' : ''}`),
+        c.email !== conta.email && el('button', {
+          type: 'button', class: 'botao-fantasma', 'data-acao': 'senha-servidor', 'aria-label': `Gerar senha provisória para ${c.nome}`,
+        }, 'Gerar senha')))));
+  }
+
+  // Esqueceu a senha ou ficou bloqueada: a senha nova também desbloqueia a conta.
+  async function gerarSenhaPeloServidor(botao) {
+    const li = botao.closest('.conta');
+    const nome = li.querySelector('strong').textContent;
+    const r = await comBotaoTravado(botao, () => gerarSenhaNoServidor(li.dataset.email));
+    if (!r.ok) { avisar(r.erro); return; }
+    registrarAuditoria('Gerou senha provisória', nome);
+    await desenharContasDoServidor();
+    mostrarSenhaGerada(nome, r.senhaProvisoria);
   }
 
   // Tabela "o que cada perfil vê", montada das mesmas listas que as regras usam: nunca fica desatualizada.
@@ -1095,6 +1109,7 @@
       ['Registrar doações e saídas de itens', (p) => p.pode.includes('doacao_item')],
       ['Histórico', (p) => p.pode.includes('historico')],
       ['Desfazer movimentações', (p) => p.pode.includes('desfazer')],
+      ['Mudar o estoque mínimo', (p) => p.pode.includes('editar_minimo')],
       ['Acessos, backup e registro de atividades', (p) => p.pode.includes('administrar')],
     ];
     const perfis = Object.values(PERFIS);
@@ -1162,6 +1177,7 @@
   $('lista-contas').addEventListener('click', async (e) => {
     const acao = e.target.closest('button[data-acao]')?.dataset.acao;
     if (!acao || conferirSessao()) return;
+    if (acao === 'senha-servidor') { await gerarSenhaPeloServidor(e.target.closest('button')); return; }
     const codigo = e.target.closest('.conta').dataset.codigo;
     const pessoa = listarContas().find((c) => c.codigo === codigo);
     if (acao === 'senha') {

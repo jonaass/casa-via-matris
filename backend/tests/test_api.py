@@ -1048,3 +1048,23 @@ def test_mudar_o_minimo_do_item(cliente):
         assert cliente.post(caminho, json={"minimo": 9}, headers=ORIGEM).status_code == 403
     entrar(cliente, "administrador")
     assert cliente.post(caminho, json={"minimo": ""}, headers=ORIGEM).json()["item"]["minimo"] == 0
+
+
+def test_administrador_gera_senha_nova_pelo_site(cliente, con):
+    """POST /api/contas/senha: só o administrador, nunca a própria; desbloqueia e a senha nasce provisória (1.6.3)."""
+    alvo = {"email": "Voluntario@Teste.com"}
+    entrar(cliente, "financeiro")
+    assert cliente.post("/api/contas/senha", json=alvo, headers=ORIGEM).status_code == 403
+    entrar(cliente, "administrador")
+    assert cliente.post("/api/contas/senha", json={"email": "administrador@teste.com"}, headers=ORIGEM).status_code == 400
+    assert cliente.post("/api/contas/senha", json={"email": "ninguem@teste.com"}, headers=ORIGEM).status_code == 404
+    assert cliente.post("/api/contas/senha", json=alvo).status_code == 403  # sem Origin (CSRF)
+    with con:
+        con.execute("UPDATE usuarios SET bloqueado_ate = 9999999999 WHERE email = 'voluntario@teste.com'")
+    r = cliente.post("/api/contas/senha", json=alvo, headers=ORIGEM)
+    assert r.status_code == 200
+    senha = r.json()["senhaProvisoria"]
+    conta = next(c for c in cliente.get("/api/contas").json() if c["email"] == "voluntario@teste.com")
+    assert conta["provisoria"] and not conta["bloqueada"]
+    r = cliente.post("/api/entrar", json={"email": "voluntario@teste.com", "senha": senha}, headers=ORIGEM)
+    assert r.status_code == 403 and r.json()["campo"] == "senhaProvisoria"

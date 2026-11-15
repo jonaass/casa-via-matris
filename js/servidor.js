@@ -318,6 +318,19 @@
     return { ok: true, senhaProvisoria: r.corpo.senhaProvisoria };
   }
 
+  /** O administrador dá uma senha provisória nova a outra pessoa (também desbloqueia). Devolve como o criarConta. */
+  async function gerarSenhaNoServidor(email) {
+    let r;
+    try {
+      r = await pedir('api/contas/senha', { method: 'POST', body: JSON.stringify({ email }) });
+    } catch (e) {
+      return falha('A conexão com o servidor caiu. Tente de novo.');
+    }
+    if (r.status === 401) return falha('Sua sessão no servidor acabou. Saia e entre de novo.');
+    if (r.status !== 200 || !r.corpo || !r.corpo.senhaProvisoria) return falha((r.corpo && r.corpo.erro) || 'O servidor não gerou a senha. Tente de novo.');
+    return { ok: true, senhaProvisoria: r.corpo.senhaProvisoria };
+  }
+
   /** As pessoas com acesso, direto do servidor (só o administrador recebe). null se não deu para buscar. */
   async function listarContasDoServidor() {
     try {
@@ -370,5 +383,5 @@
     if (lerConfig().sairPendente) fecharSessaoNoServidor();
   }
 
-  Object.assign(globalThis, { mudarMinimoNoServidor, criarContaNoServidor, listarContasDoServidor, gravarNoServidor, estornarNoServidor, entrarPeloServidor, definirSenhaPeloServidor, aceitarTermosPeloServidor, servidorNoAr, modoServidor, limparCopia, copiaDeOutraPessoa, terminarSaidaPendente, bloqueadoPeloServidor, puxarDoServidor, sairDoServidor, trocarSenhaNoServidor });
+  Object.assign(globalThis, { gerarSenhaNoServidor, mudarMinimoNoServidor, criarContaNoServidor, listarContasDoServidor, gravarNoServidor, estornarNoServidor, entrarPeloServidor, definirSenhaPeloServidor, aceitarTermosPeloServidor, servidorNoAr, modoServidor, limparCopia, copiaDeOutraPessoa, terminarSaidaPendente, bloqueadoPeloServidor, puxarDoServidor, sairDoServidor, trocarSenhaNoServidor });
 })();

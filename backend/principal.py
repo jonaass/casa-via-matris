@@ -336,6 +336,25 @@ def criar_conta(dados: NovaConta, _: Any = Depends(exigir("administrar")), con: 
     return {"ok": True, "senhaProvisoria": provisoria}
 
 
+class SenhaNova(BaseModel):
+    email: str = Field(max_length=120)
+
+
+@app.post("/api/contas/senha", tags=["conta"], dependencies=[Depends(conferir_origem)])
+def gerar_senha(dados: SenhaNova, usuario: sqlite3.Row = Depends(exigir("administrar")),
+                con: sqlite3.Connection = Depends(obter_banco)):
+    """O administrador dá uma senha provisória nova a outra pessoa (esqueceu a senha ou ficou bloqueada).
+    Desbloqueia a conta e fecha as sessões dela, como o comando "senha". A senha volta só nesta resposta."""
+    if seguranca.normalizar_email(dados.email) == usuario["email"]:
+        raise ErroDaApi(400, "Para a sua própria senha, use Trocar senha no menu.", "email")
+    provisoria = secrets.token_urlsafe(9)
+    try:
+        seguranca.redefinir_senha(con, dados.email, provisoria)
+    except ValueError as e:
+        raise ErroDaApi(404, str(e), "email") from None
+    return {"ok": True, "senhaProvisoria": provisoria}
+
+
 @app.get("/api/eu", tags=["conta"])
 def eu(usuario: sqlite3.Row = Depends(usuario_logado)):
     """Quem está logado e o que o perfil pode fazer."""
