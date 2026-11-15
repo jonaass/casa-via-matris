@@ -342,7 +342,7 @@
     // Muda o estoque mínimo e anota quem mudou e quando (backend/movimentos.py: mudar_minimo).
     function mudarMinimo(codigo, valor, quem = '') {
       if (!permitir('editar_minimo')) return falha(NEGADO);
-      const minimo = arred(quantidadeDeTexto(String(valor ?? '').trim() || '0'));
+      const minimo = arred(quantidadeDeTexto(String(valor ?? '') || '0')); // só espaços é recusado, como no servidor
       if (!Number.isFinite(minimo)) return falha('Informe o estoque mínimo só com números, como 5 ou 2,5.');
       if (minimo < 0) return falha('O estoque mínimo não pode ser negativo.');
       if (minimo > QUANTIDADE_MAXIMA) return falha('Essa quantidade parece errada. Confira o número digitado.');
