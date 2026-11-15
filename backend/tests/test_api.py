@@ -1068,3 +1068,23 @@ def test_administrador_gera_senha_nova_pelo_site(cliente, con):
     assert conta["provisoria"] and not conta["bloqueada"]
     r = cliente.post("/api/entrar", json={"email": "voluntario@teste.com", "senha": senha}, headers=ORIGEM)
     assert r.status_code == 403 and r.json()["campo"] == "senhaProvisoria"
+
+
+def test_administrador_muda_o_perfil_pelo_site(cliente):
+    """POST /api/contas/perfil: só o administrador, nunca o próprio; a pessoa precisa entrar de novo (1.6.4)."""
+    outro = TestClient(app)
+    assert entrar(outro, "almoxarifado").status_code == 200
+    pedido = {"email": "Almoxarifado@Teste.com", "perfil": "financeiro"}
+    entrar(cliente, "financeiro")
+    assert cliente.post("/api/contas/perfil", json=pedido, headers=ORIGEM).status_code == 403
+    entrar(cliente, "administrador")
+    assert cliente.post("/api/contas/perfil", json=pedido).status_code == 403  # sem Origin (CSRF)
+    proprio = cliente.post("/api/contas/perfil", json={"email": "administrador@teste.com", "perfil": "financeiro"}, headers=ORIGEM)
+    assert proprio.status_code == 400
+    assert cliente.post("/api/contas/perfil", json={**pedido, "perfil": "chefe"}, headers=ORIGEM).json()["campo"] == "perfil"
+    assert cliente.post("/api/contas/perfil", json={**pedido, "email": "ninguem@teste.com"}, headers=ORIGEM).status_code == 404
+    assert cliente.post("/api/contas/perfil", json=pedido, headers=ORIGEM).status_code == 200
+    assert next(c for c in cliente.get("/api/contas").json() if c["email"] == "almoxarifado@teste.com")["perfil"] == "financeiro"
+    assert outro.get("/api/itens").status_code == 401  # a sessão antiga foi fechada
+    entrar(outro, "almoxarifado")
+    assert outro.get("/api/itens").status_code == 403 and outro.get("/api/dinheiro").status_code == 200

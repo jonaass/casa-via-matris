@@ -331,6 +331,19 @@
     return { ok: true, senhaProvisoria: r.corpo.senhaProvisoria };
   }
 
+  /** O administrador muda o perfil de outra pessoa (que precisa entrar de novo). Devolve { ok } ou { ok: false, erro }. */
+  async function mudarPerfilNoServidor(email, perfil) {
+    let r;
+    try {
+      r = await pedir('api/contas/perfil', { method: 'POST', body: JSON.stringify({ email, perfil }) });
+    } catch (e) {
+      return falha('A conexão com o servidor caiu. Confira a lista antes de tentar de novo.');
+    }
+    if (r.status === 401) return falha('Sua sessão no servidor acabou. Saia e entre de novo.');
+    if (r.status !== 200) return falha((r.corpo && r.corpo.erro) || 'O servidor não mudou o perfil. Tente de novo.');
+    return { ok: true };
+  }
+
   /** As pessoas com acesso, direto do servidor (só o administrador recebe). null se não deu para buscar. */
   async function listarContasDoServidor() {
     try {
@@ -383,5 +396,5 @@
     if (lerConfig().sairPendente) fecharSessaoNoServidor();
   }
 
-  Object.assign(globalThis, { gerarSenhaNoServidor, mudarMinimoNoServidor, criarContaNoServidor, listarContasDoServidor, gravarNoServidor, estornarNoServidor, entrarPeloServidor, definirSenhaPeloServidor, aceitarTermosPeloServidor, servidorNoAr, modoServidor, limparCopia, copiaDeOutraPessoa, terminarSaidaPendente, bloqueadoPeloServidor, puxarDoServidor, sairDoServidor, trocarSenhaNoServidor });
+  Object.assign(globalThis, { mudarPerfilNoServidor, gerarSenhaNoServidor, mudarMinimoNoServidor, criarContaNoServidor, listarContasDoServidor, gravarNoServidor, estornarNoServidor, entrarPeloServidor, definirSenhaPeloServidor, aceitarTermosPeloServidor, servidorNoAr, modoServidor, limparCopia, copiaDeOutraPessoa, terminarSaidaPendente, bloqueadoPeloServidor, puxarDoServidor, sairDoServidor, trocarSenhaNoServidor });
 })();

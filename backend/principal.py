@@ -355,6 +355,30 @@ def gerar_senha(dados: SenhaNova, usuario: sqlite3.Row = Depends(exigir("adminis
     return {"ok": True, "senhaProvisoria": provisoria}
 
 
+class NovoPerfil(BaseModel):
+    email: str = Field(max_length=120)
+    perfil: str = Field(max_length=20)
+
+
+@app.post("/api/contas/perfil", tags=["conta"], dependencies=[Depends(conferir_origem)])
+def mudar_perfil(dados: NovoPerfil, usuario: sqlite3.Row = Depends(exigir("administrar")),
+                 con: sqlite3.Connection = Depends(obter_banco)):
+    """O administrador muda o perfil de outra pessoa. Nunca o próprio: assim sempre fica um administrador.
+    Fecha as sessões dela: no próximo acesso, o aparelho busca só o que o perfil novo pode ver."""
+    if dados.perfil not in seguranca.PERFIS:
+        raise ErroDaApi(400, "Escolha um perfil.", "perfil")
+    email = seguranca.normalizar_email(dados.email)
+    if email == usuario["email"]:
+        raise ErroDaApi(400, "Outro administrador precisa mudar o seu perfil.", "email")
+    alvo = con.execute("SELECT codigo FROM usuarios WHERE email = ?", (email,)).fetchone()
+    if alvo is None:
+        raise ErroDaApi(404, "Não existe conta com esse e-mail.", "email")
+    with con:
+        con.execute("UPDATE usuarios SET perfil = ? WHERE codigo = ?", (dados.perfil, alvo["codigo"]))
+        con.execute("DELETE FROM sessoes WHERE usuario_codigo = ?", (alvo["codigo"],))
+    return {"ok": True}
+
+
 @app.get("/api/eu", tags=["conta"])
 def eu(usuario: sqlite3.Row = Depends(usuario_logado)):
     """Quem está logado e o que o perfil pode fazer."""

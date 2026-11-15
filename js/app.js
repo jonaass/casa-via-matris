@@ -1071,7 +1071,7 @@
     ];
   }
 
-  // No servidor, a lista mostra as pessoas e gera senha nova; mudar perfil e desativar são feitos pelo comando.
+  // No servidor, a lista mostra as pessoas, muda o perfil e gera senha nova; desativar é feito pelo comando.
   async function desenharContasDoServidor() {
     const lista = await listarContasDoServidor();
     if (!modoServidor()) return;
@@ -1082,7 +1082,12 @@
     $('lista-contas').replaceChildren(...lista.map((c) => el('li', { class: 'conta', 'data-email': c.email },
       el('div', {}, ...dadosDaConta(c)),
       el('div', { class: 'conta-acoes' },
-        el('span', { class: 'conta-eu' }, `${PERFIS[c.perfil] ? PERFIS[c.perfil].rotulo : c.perfil}${c.email === conta.email ? ' (você)' : ''}`),
+        // O próprio perfil não muda aqui: um toque errado tiraria o seu acesso de administrador.
+        c.email === conta.email
+          ? el('span', { class: 'conta-eu' }, `${PERFIS[c.perfil] ? PERFIS[c.perfil].rotulo : c.perfil} (você)`)
+          : el('label', {}, el('span', { class: 'visualmente-oculto' }, `Perfil de ${c.nome}`),
+            el('select', { 'data-acao': 'perfil-servidor' }, Object.entries(PERFIS).map(([valor, p]) =>
+              el('option', { value: valor, selected: valor === c.perfil }, p.rotulo)))),
         c.email !== conta.email && el('button', {
           type: 'button', class: 'botao-fantasma', 'data-acao': 'senha-servidor', 'aria-label': `Gerar senha provisória para ${c.nome}`,
         }, 'Gerar senha')))));
@@ -1215,7 +1220,18 @@
     focarNaConta(codigo, 'ativo');
   });
 
-  $('lista-contas').addEventListener('change', (e) => {
+  $('lista-contas').addEventListener('change', async (e) => {
+    if (e.target.dataset.acao === 'perfil-servidor' && !conferirSessao()) {
+      const li = e.target.closest('.conta');
+      const nome = li.querySelector('strong').textContent;
+      e.target.disabled = true;
+      const r = await mudarPerfilNoServidor(li.dataset.email, e.target.value);
+      if (r.ok) registrarAuditoria('Mudou o perfil', `${nome}: ${PERFIS[e.target.value].rotulo}`);
+      avisar(r.ok ? `${nome} agora é ${PERFIS[e.target.value].rotulo}. No próximo acesso, a pessoa entra com o perfil novo.` : r.erro);
+      await desenharContasDoServidor(); // volta o perfil certo na lista, mesmo se deu erro
+      [...$('lista-contas').children].find((l) => l.dataset.email === li.dataset.email)?.querySelector('select')?.focus();
+      return;
+    }
     if (e.target.dataset.acao !== 'perfil' || conferirSessao()) return;
     const codigo = e.target.closest('.conta').dataset.codigo;
     const r = alterarConta(codigo, { perfil: e.target.value });
