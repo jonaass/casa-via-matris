@@ -12,6 +12,7 @@ A API lê o banco e grava movimentações (registrar e desfazer). As regras de g
 movimentos.py e repetem as do js/store.js.
 """
 import os
+import secrets
 import sqlite3
 import time
 from contextlib import asynccontextmanager
@@ -296,6 +297,43 @@ def trocar_senha(dados: TrocaDeSenha, request: Request, usuario: sqlite3.Row = D
     if erro:
         raise ErroDaApi(400, erro, "senhaAtual" if "incorret" in erro or "bloqueada" in erro else "novaSenha")
     return {"ok": True}
+
+
+class NovaConta(BaseModel):
+    nome: str = Field(max_length=80)
+    email: str = Field(max_length=120)
+    perfil: str = Field(max_length=20)
+
+
+def _conta_da_lista(u) -> dict:
+    # Os mesmos campos que a página Acessos usa para as contas do aparelho.
+    aceitou = u["termos_em"] if u["termos_versao"] == seguranca.TERMOS_VERSAO else None
+    return {"nome": u["nome"], "email": u["email"], "perfil": u["perfil"], "ativo": bool(u["ativo"]),
+            "provisoria": bool(u["provisoria"]), "bloqueada": u["bloqueado_ate"] > time.time(), "termosAceitosEm": aceitou}
+
+
+@app.get("/api/contas", tags=["conta"])
+def listar_contas(_: Any = Depends(exigir("administrar")), con: sqlite3.Connection = Depends(obter_banco)):
+    """As pessoas com acesso (só para o administrador). Nunca manda senha nem nada dela."""
+    linhas = con.execute("SELECT nome, email, perfil, ativo, provisoria, bloqueado_ate, termos_versao, termos_em"
+                         " FROM usuarios ORDER BY lower(nome)").fetchall()
+    return [_conta_da_lista(u) for u in linhas]
+
+
+@app.post("/api/contas", tags=["conta"], dependencies=[Depends(conferir_origem)])
+def criar_conta(dados: NovaConta, _: Any = Depends(exigir("administrar")), con: sqlite3.Connection = Depends(obter_banco)):
+    """O administrador libera o acesso de uma pessoa, como no app sem servidor: a conta nasce com uma senha
+    provisória, que volta só nesta resposta para o administrador passar à pessoa. No primeiro acesso,
+    ela cria a senha dela e aceita os termos."""
+    provisoria = secrets.token_urlsafe(9)  # 12 letras e números, como o aoAcaso(12) do acesso.js
+    try:
+        seguranca.criar_usuario(con, dados.nome, dados.email, dados.perfil, provisoria,
+                                provisoria=True, aceitou_termos=False)
+    except ValueError as e:
+        erro = str(e)
+        campo = "nome" if "nome" in erro else "email" if "e-mail" in erro.lower() else "perfil" if "perfil" in erro else None
+        raise ErroDaApi(400, erro, campo) from None
+    return {"ok": True, "senhaProvisoria": provisoria}
 
 
 @app.get("/api/eu", tags=["conta"])

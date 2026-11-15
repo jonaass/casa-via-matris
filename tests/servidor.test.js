@@ -487,3 +487,25 @@ test('a conexão cai ao criar a senha: mensagem clara, ninguém entra', async ()
   assert.equal(r.erro, 'A conexão com o servidor caiu. Tente de novo.');
   assert.equal(contaAtual(), null);
 });
+
+test('liberar acesso pelo servidor devolve a senha provisória, ou o erro e o campo', async () => {
+  const antes = globalThis.fetch;
+  globalThis.fetch = async (caminho, opcoes = {}) => {
+    if (caminho !== 'api/contas') return antes(caminho, opcoes);
+    if (opcoes.method !== 'POST') return json(200, [{ nome: 'Ana', email: 'ana@x.com', perfil: 'voluntario' }]);
+    return JSON.parse(opcoes.body).email === 'repetido@x.com'
+      ? json(400, { erro: 'Esse e-mail já tem uma conta.', campo: 'email' })
+      : json(200, { ok: true, senhaProvisoria: 'abc123def456' });
+  };
+  try {
+    assert.deepEqual(await criarContaNoServidor({ nome: 'Ana', email: 'ana@x.com', perfil: 'voluntario' }),
+      { ok: true, senhaProvisoria: 'abc123def456' });
+    const r = await criarContaNoServidor({ nome: 'Ana', email: 'repetido@x.com', perfil: 'voluntario' });
+    assert.equal(r.ok, false);
+    assert.equal(r.erro, 'Esse e-mail já tem uma conta.');
+    assert.equal(r.campo, 'email');
+    assert.equal((await listarContasDoServidor())[0].email, 'ana@x.com');
+  } finally {
+    globalThis.fetch = antes;
+  }
+});

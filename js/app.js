@@ -1003,25 +1003,16 @@
 
   function desenharContas() {
     if (!pode('administrar')) return;
-    // Com o servidor da casa, as contas são criadas e mudadas lá (python -m backend.usuarios), não aqui.
-    // O acesso.js também recusa; esconder é só para a tela não oferecer o que não funciona.
+    // Com o servidor da casa, liberar acesso grava no servidor e a lista vem de lá; mudar perfil, gerar senha
+    // e desativar continuam no comando python -m backend.usuarios (o acesso.js recusa no aparelho).
     const servidor = modoServidor();
-    ['lista-contas', 'form-conta', 'titulo-liberar', 'contas-aparelho-ajuda'].forEach((id) => { $(id).hidden = servidor; });
+    $('contas-aparelho-ajuda').hidden = servidor;
     $('contas-servidor').hidden = !servidor;
     const opcoesPerfil = (atual) => Object.entries(PERFIS).map(([valor, p]) => el('option', { value: valor, selected: valor === atual }, p.rotulo));
     const eu = (c) => c.codigo === conta.codigo;
-    $('lista-contas').replaceChildren(...listarContas().map((c) => el('li', { class: 'conta', 'data-codigo': c.codigo },
-      el('div', {},
-        el('strong', {}, c.nome),
-        el('span', {}, c.email),
-        c.bloqueada && el('span', { class: 'etiqueta saida_item' }, 'Bloqueada'),
-        // Pendências em calêndula (atenção); vermelho só para o que impede o uso.
-        c.provisoria && el('span', { class: 'etiqueta pendente' }, 'Senha provisória'),
-        !c.ativo && el('span', { class: 'etiqueta saida_item' }, 'Desativada'),
-        // Quem aceitou os termos e quando: é a prova do aceite, caso a casa precise mostrar.
-        c.termosAceitosEm
-          ? el('span', { class: 'conta-termos' }, `Aceitou os termos em ${new Date(c.termosAceitosEm).toLocaleDateString('pt-BR')}`)
-          : el('span', { class: 'etiqueta pendente' }, 'Termos ainda não aceitos')),
+    if (servidor) desenharContasDoServidor();
+    else $('lista-contas').replaceChildren(...listarContas().map((c) => el('li', { class: 'conta', 'data-codigo': c.codigo },
+      el('div', {}, ...dadosDaConta(c)),
       el('div', { class: 'conta-acoes' },
         // A própria conta não troca de perfil aqui: um toque errado tiraria o seu acesso de administrador.
         eu(c)
@@ -1034,6 +1025,35 @@
     $('lista-auditoria').replaceChildren(...lerAuditoria().slice(0, 50).map((l) => el('li', {},
       el('time', { datetime: l.quando }, new Date(l.quando).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })),
       ` ${[l.quem, l.acao, l.detalhe].filter(Boolean).join(': ')}`)));
+  }
+
+  function dadosDaConta(c) {
+    return [
+      el('strong', {}, c.nome),
+      el('span', {}, c.email),
+      c.bloqueada && el('span', { class: 'etiqueta saida_item' }, 'Bloqueada'),
+      // Pendências em calêndula (atenção); vermelho só para o que impede o uso.
+      c.provisoria && el('span', { class: 'etiqueta pendente' }, 'Senha provisória'),
+      !c.ativo && el('span', { class: 'etiqueta saida_item' }, 'Desativada'),
+      // Quem aceitou os termos e quando: é a prova do aceite, caso a casa precise mostrar.
+      c.termosAceitosEm
+        ? el('span', { class: 'conta-termos' }, `Aceitou os termos em ${new Date(c.termosAceitosEm).toLocaleDateString('pt-BR')}`)
+        : el('span', { class: 'etiqueta pendente' }, 'Termos ainda não aceitos'),
+    ];
+  }
+
+  // No servidor, a lista é só para ver: mudar perfil, gerar senha e desativar são feitos pelo comando.
+  async function desenharContasDoServidor() {
+    const lista = await listarContasDoServidor();
+    if (!modoServidor()) return;
+    if (!lista) {
+      $('lista-contas').replaceChildren(el('li', { class: 'conta' }, 'Não foi possível buscar a lista de pessoas no servidor. Recarregue a página.'));
+      return;
+    }
+    $('lista-contas').replaceChildren(...lista.map((c) => el('li', { class: 'conta' },
+      el('div', {}, ...dadosDaConta(c)),
+      el('div', { class: 'conta-acoes' },
+        el('span', { class: 'conta-eu' }, `${PERFIS[c.perfil] ? PERFIS[c.perfil].rotulo : c.perfil}${c.email === conta.email ? ' (você)' : ''}`)))));
   }
 
   // Tabela "o que cada perfil vê", montada das mesmas listas que as regras usam: nunca fica desatualizada.
@@ -1091,7 +1111,8 @@
     const dados = Object.fromEntries(new FormData(e.target));
     let r;
     try {
-      r = await comBotaoTravado(e.target.querySelector('button[type=submit]'), () => criarConta(dados));
+      r = await comBotaoTravado(e.target.querySelector('button[type=submit]'),
+        () => (modoServidor() ? criarContaNoServidor(dados) : criarConta(dados)));
     } catch (erro) {
       console.warn(erro);
       r = { ok: false, erro: 'Não foi possível concluir. Tente de novo.' };

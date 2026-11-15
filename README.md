@@ -45,7 +45,8 @@ usados antes eram do protótipo. A primeira versão com acesso é a 1.0.0, corri
 ## Versão no ar
 
 - **https://casa-via-matris.vercel.app** (1.6.0, com servidor e banco): todos os aparelhos veem os mesmos dados.
-  As contas são criadas pelo administrador do servidor (`python -m backend.usuarios`, veja backend/README.md).
+  O administrador libera o acesso das pessoas na página Acessos (desde a 1.6.1); o primeiro administrador é criado
+  com `python -m backend.usuarios` (veja backend/README.md).
 - https://jonaass.github.io/casa-via-matris/ (sem servidor): cada aparelho tem as próprias contas e os próprios
   dados; o que uma pessoa registra não aparece em outro aparelho.
 
@@ -136,7 +137,9 @@ mesmo se eles falharem: confira a aba depois de enviar.
   movimentação vira um cartão, para o valor não ficar escondido à direita.
 - **Acessos** (só Administrador): tabela do que cada perfil vê, cadastro de pessoas, troca de perfil,
   senha provisória e registro de atividades. A tabela é montada das mesmas listas que as regras usam.
-  No modo servidor, o cadastro fica no servidor (`python -m backend.usuarios`) e a página só explica isso.
+  No modo servidor (1.6.1), o administrador também libera o acesso pela página: a conta é criada no servidor com
+  senha provisória, e a lista mostra as pessoas do servidor. Mudar perfil, gerar senha nova e desativar ainda são
+  feitos com `python -m backend.usuarios`.
 - **Backup**: baixa 3 planilhas (estoque, doações, dinheiro) e restaura delas, mesmo depois de editadas no Excel. Avisa quando o último backup tem mais de 7 dias.
 - **Dados de exemplo**: aparecem na primeira abertura. "Começar do zero" apaga tudo para o uso real.
 - **App no celular**: instala na tela inicial e abre sem internet.
@@ -203,6 +206,7 @@ Quando o site é aberto pelo servidor, depois do login ele **puxa os dados do ba
 | `movimentos()`         | `GET /api/doacoes` e `GET /api/dinheiro` | pronta |
 | (login)                | `POST /api/entrar`, `POST /api/sair`, `GET /api/eu`, `POST /api/trocar-senha` | pronta |
 | `trocarSenha` (provisória), `aceitarTermos` | `POST /api/definir-senha`, `POST /api/aceitar-termos` | pronta (1.5.0) |
+| `criarConta`, `listarContas` | `POST /api/contas`, `GET /api/contas` (só administrador) | pronta (1.6.1) |
 | `registrar(entrada)`   | `POST /api/movimentos`               | pronta (1.5.0) |
 | `estornar(id)`         | `POST /api/movimentos/{id}/estorno`  | pronta (1.5.0): grava o lançamento contrário |
 | `resumo()`             | calculado no aparelho com os dados puxados | |

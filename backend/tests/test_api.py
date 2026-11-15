@@ -999,3 +999,29 @@ def test_nul_no_texto_nao_derruba_o_pedido(cliente):
     assert r.status_code == 200 and r.json()["movimento"]["descricao"] == "ab"
     assert cliente.post("/api/entrar", json={"email": "a\u0000@teste.com", "senha": "x" * 10},
                         headers=ORIGEM).status_code == 401
+
+
+def test_administrador_libera_acesso_pelo_site(cliente):
+    """POST /api/contas: só o administrador; a conta nasce com senha provisória e aparece na lista."""
+    nova = {"nome": "Maria Teste", "email": "Maria@Teste.com", "perfil": "voluntario"}
+    assert cliente.post("/api/contas", json=nova, headers=ORIGEM).status_code == 401  # sem sessão
+    assert entrar(cliente, "financeiro").status_code == 200
+    assert cliente.post("/api/contas", json=nova, headers=ORIGEM).status_code == 403
+    assert cliente.get("/api/contas").status_code == 403
+    assert entrar(cliente, "administrador").status_code == 200
+    assert cliente.post("/api/contas", json=nova).status_code == 403  # sem Origin (CSRF)
+    r = cliente.post("/api/contas", json=nova, headers=ORIGEM)
+    assert r.status_code == 200 and len(r.json()["senhaProvisoria"]) >= 12
+    senha = r.json()["senhaProvisoria"]
+    repetido = cliente.post("/api/contas", json=nova, headers=ORIGEM)
+    assert repetido.status_code == 400 and repetido.json()["campo"] == "email"
+    sem_perfil = cliente.post("/api/contas", json={**nova, "email": "outra@teste.com", "perfil": "chefe"}, headers=ORIGEM)
+    assert sem_perfil.status_code == 400 and sem_perfil.json()["campo"] == "perfil"
+    lista = cliente.get("/api/contas").json()
+    maria = next(c for c in lista if c["email"] == "maria@teste.com")
+    assert maria == {"nome": "Maria Teste", "email": "maria@teste.com", "perfil": "voluntario", "ativo": True,
+                     "provisoria": True, "bloqueada": False, "termosAceitosEm": None}
+    assert all("senha" not in k for c in lista for k in c)
+    # A pessoa entra com a provisória e o servidor pede a senha dela.
+    r = cliente.post("/api/entrar", json={"email": "maria@teste.com", "senha": senha}, headers=ORIGEM)
+    assert r.status_code == 403 and r.json()["campo"] == "senhaProvisoria"

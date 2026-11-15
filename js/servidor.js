@@ -289,6 +289,31 @@
     return enviarGravacao(`api/movimentos/${encodeURIComponent(codigo)}/estorno`, {});
   }
 
+  /** O administrador libera o acesso de uma pessoa no servidor. Devolve como o criarConta do acesso.js. */
+  async function criarContaNoServidor({ nome, email, perfil }) {
+    let r;
+    try {
+      r = await pedir('api/contas', { method: 'POST', body: JSON.stringify({ nome, email, perfil }) });
+    } catch (e) {
+      return falha('A conexão com o servidor caiu. Confira a lista de pessoas antes de tentar de novo.');
+    }
+    if (r.status === 401) return falha('Sua sessão no servidor acabou. Saia e entre de novo.');
+    if (r.status !== 200 || !r.corpo || !r.corpo.senhaProvisoria) {
+      return { ...falha((r.corpo && r.corpo.erro) || 'O servidor não criou a conta. Tente de novo.'), campo: (r.corpo && r.corpo.campo) || null };
+    }
+    return { ok: true, senhaProvisoria: r.corpo.senhaProvisoria };
+  }
+
+  /** As pessoas com acesso, direto do servidor (só o administrador recebe). null se não deu para buscar. */
+  async function listarContasDoServidor() {
+    try {
+      const r = await pedir('api/contas');
+      return r.status === 200 && Array.isArray(r.corpo) ? r.corpo : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
   /**
    * Fecha a sessão no servidor e apaga do aparelho a cópia dos dados do banco: a próxima pessoa
    * que usar o aparelho não fica com os dados de quem saiu (ela recebe os dela ao entrar).
@@ -331,5 +356,5 @@
     if (lerConfig().sairPendente) fecharSessaoNoServidor();
   }
 
-  Object.assign(globalThis, { gravarNoServidor, estornarNoServidor, entrarPeloServidor, definirSenhaPeloServidor, aceitarTermosPeloServidor, servidorNoAr, modoServidor, limparCopia, copiaDeOutraPessoa, terminarSaidaPendente, bloqueadoPeloServidor, puxarDoServidor, sairDoServidor, trocarSenhaNoServidor });
+  Object.assign(globalThis, { criarContaNoServidor, listarContasDoServidor, gravarNoServidor, estornarNoServidor, entrarPeloServidor, definirSenhaPeloServidor, aceitarTermosPeloServidor, servidorNoAr, modoServidor, limparCopia, copiaDeOutraPessoa, terminarSaidaPendente, bloqueadoPeloServidor, puxarDoServidor, sairDoServidor, trocarSenhaNoServidor });
 })();
