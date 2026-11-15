@@ -270,7 +270,9 @@
         }, barra, marca),
         el('div', { class: 'item-rodape' },
           el('span', { class: 'situacao' }, s.texto),
-          el('span', {}, `mín. ${textoDaQuantidade(item.minimo, item.unidade)}`),
+          el('span', item.minimoMudadoEm
+            ? { title: `Mínimo mudado por ${item.minimoMudadoPor || 'alguém'} em ${new Date(item.minimoMudadoEm).toLocaleDateString('pt-BR')}` }
+            : {}, `mín. ${textoDaQuantidade(item.minimo, item.unidade)}`),
           validade),
         acoesDoItem(item));
     }));
@@ -282,21 +284,25 @@
    * Passa pelas mesmas regras (store.registrar): não deixa sair mais do que existe.
    * Para informar doador, validade ou motivo, o link leva ao Registrar já com o item escolhido.
    */
-  const ROTULOS_RAPIDOS = { saida_item: 'Quanto saiu?', doacao_item: 'Quanto chegou?' };
+  const ROTULOS_RAPIDOS = { saida_item: 'Quanto saiu?', doacao_item: 'Quanto chegou?', minimo: 'Novo estoque mínimo' };
+  const BOTAO_RAPIDO = { saida_item: 'Dar baixa', doacao_item: 'Somar', minimo: 'Salvar' };
 
   function acoesDoItem(item) {
-    const pode_ = { saida_item: pode('saida_item'), doacao_item: pode('doacao_item') };
-    if (!pode_.saida_item && !pode_.doacao_item) return null;
+    const pode_ = { saida_item: pode('saida_item'), doacao_item: pode('doacao_item'), minimo: pode('editar_minimo') };
+    if (!pode_.saida_item && !pode_.doacao_item && !pode_.minimo) return null;
     if (rapido?.codigo === item.codigo) {
       const id = `rapido-${item.codigo}`;
       return el('form', { class: 'item-rapido', 'data-codigo': item.codigo, novalidate: true },
         el('label', { for: id }, `${ROTULOS_RAPIDOS[rapido.tipo]} `, el('span', { class: 'unidade' }, `(${item.unidade})`)),
         el('div', { class: 'item-rapido-linha' },
-          el('input', { id, name: 'quantidade', inputmode: 'decimal', autocomplete: 'off', 'aria-describedby': `${id}-erro` }),
-          el('button', { type: 'submit', class: 'botao botao-pequeno' }, rapido.tipo === 'saida_item' ? 'Dar baixa' : 'Somar'),
+          el('input', {
+            id, name: 'quantidade', inputmode: 'decimal', autocomplete: 'off', 'aria-describedby': `${id}-erro`,
+            value: rapido.tipo === 'minimo' ? textoDaQuantidade(item.minimo) : '',
+          }),
+          el('button', { type: 'submit', class: 'botao botao-pequeno' }, BOTAO_RAPIDO[rapido.tipo]),
           el('button', { type: 'button', class: 'botao-fantasma', 'data-rapido': 'cancelar' }, 'Cancelar')),
         el('p', { class: 'erro', id: `${id}-erro`, role: 'alert' }),
-        el('button', { type: 'button', class: 'link item-rapido-mais', 'data-rapido': 'detalhes' },
+        rapido.tipo !== 'minimo' && el('button', { type: 'button', class: 'link item-rapido-mais', 'data-rapido': 'detalhes' },
           rapido.tipo === 'saida_item' ? 'Informar para onde foi e o motivo' : 'Informar doador e validade'));
     }
     return el('div', { class: 'item-acoes' },
@@ -307,7 +313,11 @@
       pode_.doacao_item && el('button', {
         type: 'button', class: 'botao-fantasma', 'data-rapido': 'doacao_item', 'data-codigo': item.codigo,
         'aria-label': `Somar doação de ${item.nome}`,
-      }, '+ Chegou'));
+      }, '+ Chegou'),
+      pode_.minimo && el('button', {
+        type: 'button', class: 'botao-fantasma', 'data-rapido': 'minimo', 'data-codigo': item.codigo,
+        'aria-label': `Mudar o estoque mínimo de ${item.nome}`,
+      }, 'Mínimo'));
   }
 
   function focarNoItem(codigo, seletor) {
@@ -345,6 +355,7 @@
     if (conferirSessao() || !rapido) return;
     const formRapido = e.target;
     const { codigo, tipo } = rapido;
+    if (tipo === 'minimo') { await salvarMinimo(formRapido, codigo); return; }
     const entrada = { tipo, itemId: codigo, quantidade: formRapido.elements.quantidade.value, data: dataDeHoje() };
     const r = await comBotaoTravado(formRapido.querySelector('button[type=submit]'), () => registrarMovimento(entrada));
     if (!r.ok) {
@@ -361,6 +372,24 @@
     avisar(`${textosPorTipo[tipo].feito}: ${detalhe}.`, pode('desfazer') ? r.movimento.codigo : null);
     focarNoItem(codigo, '.item-acoes button:not(:disabled)');
   });
+
+  async function salvarMinimo(formRapido, codigo) {
+    const valor = formRapido.elements.quantidade.value;
+    const r = await comBotaoTravado(formRapido.querySelector('button[type=submit]'),
+      () => (modoServidor() ? mudarMinimoNoServidor(codigo, valor) : store.mudarMinimo(codigo, valor, contaAtual()?.nome)));
+    if (!r.ok) {
+      formRapido.querySelector('.erro').textContent = r.erro;
+      formRapido.elements.quantidade.setAttribute('aria-invalid', 'true');
+      formRapido.elements.quantidade.focus();
+      return;
+    }
+    const detalhe = `${r.item.nome}: ${textoDaQuantidade(r.item.minimo, r.item.unidade)}`;
+    rapido = null;
+    registrarAuditoria('Mudou o estoque mínimo', detalhe);
+    atualizarTudo();
+    avisar(`Estoque mínimo mudado. ${detalhe}.`);
+    focarNoItem(codigo, '.item-acoes button:not(:disabled)');
+  }
 
   $('lista-itens').addEventListener('keydown', (e) => {
     if (e.key !== 'Escape' || !rapido) return;

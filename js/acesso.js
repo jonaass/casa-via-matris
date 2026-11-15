@@ -30,7 +30,7 @@
   const PERFIS = {
     administrador: {
       rotulo: 'Administrador', resumo: 'Vê e faz tudo, inclusive cadastrar pessoas e fazer backup.',
-      pode: [...ESTOQUE, ...DINHEIRO, 'historico', 'desfazer', 'administrar'],
+      pode: [...ESTOQUE, ...DINHEIRO, 'historico', 'desfazer', 'administrar', 'editar_minimo'],
     },
     financeiro: {
       rotulo: 'Financeiro', resumo: 'Cuida do dinheiro: saldo, gráfico, entradas, despesas e o histórico do caixa. Não vê o estoque.',
@@ -38,7 +38,7 @@
     },
     almoxarifado: {
       rotulo: 'Almoxarifado', resumo: 'Cuida do estoque: itens, doações, saídas e o histórico do estoque. Não vê o dinheiro.',
-      pode: [...ESTOQUE, 'historico', 'desfazer'],
+      pode: [...ESTOQUE, 'historico', 'desfazer', 'editar_minimo'],
     },
     voluntario: {
       rotulo: 'Voluntário', resumo: 'Consulta o estoque e registra doações e saídas de itens. Não vê dinheiro nem histórico, e não desfaz.',

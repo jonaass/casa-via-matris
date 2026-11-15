@@ -339,6 +339,20 @@
       return removido.ok ? { ok: true } : falha(removido.erros[0]);
     }
 
+    // Muda o estoque mínimo e anota quem mudou e quando (backend/movimentos.py: mudar_minimo).
+    function mudarMinimo(codigo, valor, quem = '') {
+      if (!permitir('editar_minimo')) return falha(NEGADO);
+      const minimo = arred(quantidadeDeTexto(String(valor ?? '').trim() || '0'));
+      if (!Number.isFinite(minimo)) return falha('Informe o estoque mínimo só com números, como 5 ou 2,5.');
+      if (minimo < 0) return falha('O estoque mínimo não pode ser negativo.');
+      if (minimo > QUANTIDADE_MAXIMA) return falha('Essa quantidade parece errada. Confira o número digitado.');
+      const item = acharItem(codigo);
+      if (!item) return falha('Esse item não existe mais.');
+      const novo = { ...item, minimo, minimoMudadoPor: texto(quem, 80), minimoMudadoEm: new Date().toISOString() };
+      const salvo = salvarRegistro('itens', novo);
+      return salvo.ok ? { ok: true, item: novo } : falha(salvo.erros[0]);
+    }
+
     function resumo() {
       const mes = dataDeHoje().slice(0, 7);
       let entradasMes = 0;
@@ -404,6 +418,7 @@
       item: (codigo) => acharItem(codigo) ?? null,
       registrar,
       estornar,
+      mudarMinimo,
       resumo,
       fluxoMensal,
       restaurarExemplo: () => (podeTrocarDados() ? gravarColecoes(dadosDeExemplo()) : NEGADO),

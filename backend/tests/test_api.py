@@ -1025,3 +1025,26 @@ def test_administrador_libera_acesso_pelo_site(cliente):
     # A pessoa entra com a provisória e o servidor pede a senha dela.
     r = cliente.post("/api/entrar", json={"email": "maria@teste.com", "senha": senha}, headers=ORIGEM)
     assert r.status_code == 403 and r.json()["campo"] == "senhaProvisoria"
+
+
+def test_mudar_o_minimo_do_item(cliente):
+    """POST /api/itens/{codigo}/minimo: Administrador e Almoxarifado; anota quem mudou (1.6.2)."""
+    entrar(cliente, "almoxarifado")
+    codigo = item_novo(cliente)["item"]["codigo"]
+    caminho = f"/api/itens/{codigo}/minimo"
+    assert cliente.post(caminho, json={"minimo": "2,5"}).status_code == 403  # sem Origin (CSRF)
+    r = cliente.post(caminho, json={"minimo": "2,5"}, headers=ORIGEM)
+    assert r.status_code == 200
+    item = r.json()["item"]
+    assert item["minimo"] == 2.5 and item["minimoMudadoPor"] == "Almoxarifado" and item["minimoMudadoEm"].endswith("Z")
+    assert next(i for i in cliente.get("/api/itens").json() if i["codigo"] == codigo)["minimo"] == 2.5
+    for valor, erro in (("abc", "Informe o estoque mínimo só com números, como 5 ou 2,5."),
+                        (-1, "O estoque mínimo não pode ser negativo.")):
+        r = cliente.post(caminho, json={"minimo": valor}, headers=ORIGEM)
+        assert r.status_code == 422 and r.json() == {"erro": erro, "campo": "minimo"}
+    assert cliente.post("/api/itens/nao-existe/minimo", json={"minimo": 1}, headers=ORIGEM).status_code == 404
+    for perfil in ("voluntario", "financeiro"):
+        entrar(cliente, perfil)
+        assert cliente.post(caminho, json={"minimo": 9}, headers=ORIGEM).status_code == 403
+    entrar(cliente, "administrador")
+    assert cliente.post(caminho, json={"minimo": ""}, headers=ORIGEM).json()["item"]["minimo"] == 0

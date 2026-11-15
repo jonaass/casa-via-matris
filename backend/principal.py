@@ -409,6 +409,20 @@ def estornar_movimento(codigo: str, usuario: sqlite3.Row = Depends(usuario_logad
         raise ErroDaApi(e.status, e.erro, e.campo) from None
 
 
+class NovoMinimo(BaseModel):
+    minimo: Any = None  # número ou texto ("2,5")
+
+
+@app.post("/api/itens/{codigo}/minimo", tags=["estoque"], dependencies=[Depends(conferir_origem)])
+def mudar_minimo(codigo: str, dados: NovoMinimo, usuario: sqlite3.Row = Depends(usuario_logado),
+                 con: sqlite3.Connection = Depends(obter_banco)):
+    """Muda o estoque mínimo do item (Administrador e Almoxarifado). Responde o item como ficou."""
+    try:
+        return movimentos.mudar_minimo(con, usuario, codigo, dados.minimo)
+    except movimentos.Recusa as e:
+        raise ErroDaApi(e.status, e.erro, e.campo) from None
+
+
 @app.api_route("/api/{resto:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"], include_in_schema=False)
 def rota_inexistente(resto: str, request: Request):
     # Rota que existe, mas com o método errado (ex.: POST /api/itens): 405, não 404.

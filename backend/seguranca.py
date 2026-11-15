@@ -20,9 +20,9 @@ ESTOQUE = ["ver_estoque", "doacao_item", "saida_item"]
 DINHEIRO = ["ver_financeiro", "entrada_dinheiro", "saida_dinheiro"]
 
 PERFIS: dict[str, list[str]] = {
-    "administrador": [*ESTOQUE, *DINHEIRO, "historico", "desfazer", "administrar"],
+    "administrador": [*ESTOQUE, *DINHEIRO, "historico", "desfazer", "administrar", "editar_minimo"],
     "financeiro": [*DINHEIRO, "historico", "desfazer"],
-    "almoxarifado": [*ESTOQUE, "historico", "desfazer"],
+    "almoxarifado": [*ESTOQUE, "historico", "desfazer", "editar_minimo"],
     "voluntario": [*ESTOQUE],
 }
 

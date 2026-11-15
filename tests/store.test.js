@@ -459,3 +459,20 @@ test('modo local: desfazer continua apagando o movimento, sem lançamento contr�
   assert.equal(s.movimentos().length, antes - 1);
   assert.ok(s.movimentos().every((m) => !('estornoDe' in m)));
 });
+
+test('muda o estoque mínimo e anota quem mudou (1.6.2)', () => {
+  const s = criarStore();
+  const item = s.itens()[0];
+  const r = s.mudarMinimo(item.codigo, '2,5', 'Ana');
+  assert.ok(r.ok);
+  assert.equal(s.item(item.codigo).minimo, 2.5);
+  assert.equal(s.item(item.codigo).quantidade, item.quantidade); // o resto do item não muda
+  assert.equal(s.item(item.codigo).minimoMudadoPor, 'Ana');
+  assert.equal(s.mudarMinimo(item.codigo, 'abc').erro, 'Informe o estoque mínimo só com números, como 5 ou 2,5.');
+  assert.equal(s.mudarMinimo(item.codigo, '-1').ok, false);
+  assert.equal(s.mudarMinimo('nao-existe', '1').erro, 'Esse item não existe mais.');
+  assert.equal(s.mudarMinimo(item.codigo, '').item.minimo, 0); // vazio vale 0, como no cadastro
+  const semPermissao = criarStore({ permitir: (acao) => acao !== 'editar_minimo' });
+  assert.equal(semPermissao.mudarMinimo(item.codigo, '9').erro, 'Seu perfil não pode fazer isso.');
+  assert.equal(s.item(item.codigo).minimo, 0);
+});

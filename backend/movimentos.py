@@ -121,11 +121,14 @@ def texto_da_quantidade(m: int, unidade: str) -> str:
 # ---------- respostas: os mesmos campos do js/dados.js ----------
 
 def item_publico(i: sqlite3.Row) -> dict:
-    return {
+    item = {
         "codigo": i["codigo"], "nome": i["nome"], "categoria": i["categoria"], "unidade": i["unidade"],
         "quantidade": quantidade_publica(i["quantidade_milesimos"]), "minimo": quantidade_publica(i["minimo_milesimos"]),
         "validade": i["validade"],
     }
+    if i["minimo_mudado_em"]:  # só aparece depois que alguém muda o mínimo (1.6.2)
+        item["minimoMudadoPor"], item["minimoMudadoEm"] = i["minimo_mudado_por"], i["minimo_mudado_em"]
+    return item
 
 
 def doacao_publica(m: sqlite3.Row) -> dict:
@@ -391,3 +394,26 @@ def _estornar_estoque(con: sqlite3.Connection, mov: sqlite3.Row) -> str | None:
     con.execute("UPDATE itens SET quantidade_milesimos = ?, validade = ? WHERE codigo = ?",
                 (quantidade, validade, item["codigo"]))
     return item["validade"]
+
+
+# ---------- mudar o estoque mínimo (store.js: mudarMinimo, 1.6.2) ----------
+
+def mudar_minimo(con: sqlite3.Connection, usuario, codigo: str, minimo) -> dict:
+    """Troca o mínimo do item e anota quem mudou e quando. Devolve {"item": ...}."""
+    if not seguranca.pode(usuario["perfil"], "editar_minimo"):
+        raise Recusa(NEGADO, status=403)
+    novo = milesimos(minimo if minimo not in (None, "") else "0")  # vazio vale 0, como no cadastro
+    if novo is None:
+        raise Recusa("Informe o estoque mínimo só com números, como 5 ou 2,5.", "minimo")
+    if novo < 0:
+        raise Recusa("O estoque mínimo não pode ser negativo.", "minimo")
+    if novo > QUANTIDADE_MAXIMA_MILESIMOS:
+        raise Recusa("Essa quantidade parece errada. Confira o número digitado.", "minimo")
+
+    def gravar():
+        if _item(con, codigo) is None:
+            raise Recusa("Esse item não existe mais.", status=404)
+        con.execute("UPDATE itens SET minimo_milesimos = ?, minimo_mudado_por = ?, minimo_mudado_em = ? WHERE codigo = ?",
+                    (novo, usuario["nome"], _agora_utc(), codigo))
+        return {"item": item_publico(_item(con, codigo))}
+    return _em_transacao(con, gravar)

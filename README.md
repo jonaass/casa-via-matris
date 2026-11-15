@@ -11,6 +11,9 @@ dados. O back-end continua o mesmo: com a variável `DATABASE_URL` ele usa o Pos
 (veja "Publicar na Vercel" em [backend/README.md](backend/README.md)). O limite de erros de login por IP passou
 para o banco, e os termos mudaram (todos aceitam de novo) para dizer onde os dados ficam.
 
+A 1.6.2 deixa **mudar o estoque mínimo** depois do cadastro: no Estoque, o botão "Mínimo" do item (Administrador
+e Almoxarifado). Fica anotado quem mudou e quando; passe o mouse sobre "mín." para ver.
+
 ## Versão 1.5
 
 A 1.5.0, feita pelo **Miguel**, completa a parte principal do back-end. No modo servidor, **registrar e desfazer
@@ -81,7 +84,7 @@ Testes do back-end (precisa do Python e de `pip install -r backend/requirements.
 python -m pytest backend/tests
 ```
 
-Na 1.6.0 são 120 testes do app, 34 do Miguel e 138 do back-end, e os do back-end rodam também num Postgres
+Na 1.6.2 são 122 testes do app, 34 do Miguel e 140 do back-end, e os do back-end rodam também num Postgres
 no GitHub Actions.
 
 Os testes também rodam sozinhos a cada envio, na aba Actions do GitHub. O site é publicado
@@ -108,6 +111,7 @@ mesmo se eles falharem: confira a aba depois de enviar.
   | Registrar itens | ✓ | | ✓ | ✓ |
   | Histórico | ✓ (tudo) | ✓ (só dinheiro) | ✓ (só estoque) | |
   | Desfazer | ✓ | ✓ | ✓ | |
+  | Mudar o estoque mínimo | ✓ | | ✓ | |
   | Acessos e backup | ✓ | | | |
 
   A lista de permissões fica em `js/acesso.js` (`PERFIS` e `PAGINAS`); os testes em `tests/acesso.test.js` conferem esta tabela.
@@ -207,6 +211,7 @@ Quando o site é aberto pelo servidor, depois do login ele **puxa os dados do ba
 | (login)                | `POST /api/entrar`, `POST /api/sair`, `GET /api/eu`, `POST /api/trocar-senha` | pronta |
 | `trocarSenha` (provisória), `aceitarTermos` | `POST /api/definir-senha`, `POST /api/aceitar-termos` | pronta (1.5.0) |
 | `criarConta`, `listarContas` | `POST /api/contas`, `GET /api/contas` (só administrador) | pronta (1.6.1) |
+| `mudarMinimo` | `POST /api/itens/{codigo}/minimo` (Administrador e Almoxarifado) | pronta (1.6.2) |
 | `registrar(entrada)`   | `POST /api/movimentos`               | pronta (1.5.0) |
 | `estornar(id)`         | `POST /api/movimentos/{id}/estorno`  | pronta (1.5.0): grava o lançamento contrário |
 | `resumo()`             | calculado no aparelho com os dados puxados | |

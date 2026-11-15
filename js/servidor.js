@@ -289,6 +289,20 @@
     return enviarGravacao(`api/movimentos/${encodeURIComponent(codigo)}/estorno`, {});
   }
 
+  /** Muda o estoque mínimo no banco. Devolve como o store.mudarMinimo. */
+  async function mudarMinimoNoServidor(codigo, minimo) {
+    let r;
+    try {
+      r = await pedir(`api/itens/${encodeURIComponent(codigo)}/minimo`, { method: 'POST', body: JSON.stringify({ minimo }) });
+    } catch (e) {
+      return falha('A conexão com o servidor caiu. Confira o mínimo do item antes de tentar de novo.');
+    }
+    if (r.status === 401) return falha('Sua sessão no servidor acabou. Saia e entre de novo.');
+    if (r.status !== 200 || !r.corpo || !r.corpo.item) return falha((r.corpo && r.corpo.erro) || 'O servidor não gravou. Tente de novo.');
+    salvarRegistro('itens', r.corpo.item);
+    return { ok: true, item: r.corpo.item };
+  }
+
   /** O administrador libera o acesso de uma pessoa no servidor. Devolve como o criarConta do acesso.js. */
   async function criarContaNoServidor({ nome, email, perfil }) {
     let r;
@@ -356,5 +370,5 @@
     if (lerConfig().sairPendente) fecharSessaoNoServidor();
   }
 
-  Object.assign(globalThis, { criarContaNoServidor, listarContasDoServidor, gravarNoServidor, estornarNoServidor, entrarPeloServidor, definirSenhaPeloServidor, aceitarTermosPeloServidor, servidorNoAr, modoServidor, limparCopia, copiaDeOutraPessoa, terminarSaidaPendente, bloqueadoPeloServidor, puxarDoServidor, sairDoServidor, trocarSenhaNoServidor });
+  Object.assign(globalThis, { mudarMinimoNoServidor, criarContaNoServidor, listarContasDoServidor, gravarNoServidor, estornarNoServidor, entrarPeloServidor, definirSenhaPeloServidor, aceitarTermosPeloServidor, servidorNoAr, modoServidor, limparCopia, copiaDeOutraPessoa, terminarSaidaPendente, bloqueadoPeloServidor, puxarDoServidor, sairDoServidor, trocarSenhaNoServidor });
 })();
