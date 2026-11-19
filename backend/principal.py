@@ -397,13 +397,13 @@ def listar_itens(_: sqlite3.Row = Depends(exigir("ver_estoque")), con: sqlite3.C
 @app.get("/api/doacoes", tags=["estoque"])
 def listar_doacoes(_: sqlite3.Row = Depends(exigir("ver_estoque")), con: sqlite3.Connection = Depends(obter_banco)):
     # rowid no fim: no mesmo dia e no mesmo instante, a ordem em que foram gravadas.
-    linhas = con.execute("SELECT * FROM doacoes ORDER BY data, criado_em, rowid").fetchall()
+    linhas = con.execute("SELECT * FROM doacoes WHERE apagado_em IS NULL ORDER BY data, criado_em, rowid").fetchall()
     return [movimentos.doacao_publica(m) for m in linhas]
 
 
 @app.get("/api/dinheiro", tags=["financeiro"])
 def listar_dinheiro(_: sqlite3.Row = Depends(exigir("ver_financeiro")), con: sqlite3.Connection = Depends(obter_banco)):
-    linhas = con.execute("SELECT * FROM dinheiro ORDER BY data, criado_em, rowid").fetchall()
+    linhas = con.execute("SELECT * FROM dinheiro WHERE apagado_em IS NULL ORDER BY data, criado_em, rowid").fetchall()
     return [movimentos.dinheiro_publico(m) for m in linhas]
 
 
@@ -422,6 +422,7 @@ class Movimento(BaseModel):
     data: str | None = Field(None, max_length=40)
     itemId: str | None = Field(None, max_length=100)
     novoItem: NovoItem | None = None
+    anonimo: bool | None = None  # "Doação anônima" marcada (1.7.0)
     quantidade: Any = None      # número (2.5) ou texto ("2,5")
     validade: str | None = Field(None, max_length=40)
     valorCentavos: Any = None   # inteiro: 15000 = R$ 150,00
@@ -464,6 +465,39 @@ def mudar_minimo(codigo: str, dados: NovoMinimo, usuario: sqlite3.Row = Depends(
         return movimentos.mudar_minimo(con, usuario, codigo, dados.minimo)
     except movimentos.Recusa as e:
         raise ErroDaApi(e.status, e.erro, e.campo) from None
+
+
+@app.post("/api/movimentos/{codigo}/apagar", tags=["movimentos"], dependencies=[Depends(conferir_origem)])
+def apagar_movimento(codigo: str, usuario: sqlite3.Row = Depends(usuario_logado),
+                     con: sqlite3.Connection = Depends(obter_banco)):
+    """Tira do histórico um movimento desfeito e o contrário dele (só o administrador).
+    As linhas continuam no banco, marcadas com quem apagou e quando."""
+    try:
+        return movimentos.apagar_desfeito(con, usuario, codigo)
+    except movimentos.Recusa as e:
+        raise ErroDaApi(e.status, e.erro, e.campo) from None
+
+
+class ContaAtiva(BaseModel):
+    email: str = Field(max_length=120)
+    ativo: bool
+
+
+@app.post("/api/contas/ativo", tags=["conta"], dependencies=[Depends(conferir_origem)])
+def mudar_ativo(dados: ContaAtiva, usuario: sqlite3.Row = Depends(exigir("administrar")),
+                con: sqlite3.Connection = Depends(obter_banco)):
+    """O administrador desativa (fecha as sessões) ou reativa a conta de outra pessoa. Nunca a própria."""
+    email = seguranca.normalizar_email(dados.email)
+    if email == usuario["email"]:
+        raise ErroDaApi(400, "Outro administrador precisa desativar a sua conta.", "email")
+    alvo = con.execute("SELECT codigo FROM usuarios WHERE email = ?", (email,)).fetchone()
+    if alvo is None:
+        raise ErroDaApi(404, "Não existe conta com esse e-mail.", "email")
+    with con:
+        con.execute("UPDATE usuarios SET ativo = ? WHERE codigo = ?", (int(dados.ativo), alvo["codigo"]))
+        if not dados.ativo:
+            con.execute("DELETE FROM sessoes WHERE usuario_codigo = ?", (alvo["codigo"],))
+    return {"ok": True}
 
 
 @app.api_route("/api/{resto:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"], include_in_schema=False)

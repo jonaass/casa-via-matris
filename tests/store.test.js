@@ -12,7 +12,8 @@ globalThis.localStorage = {
 
 require('../js/utilitarios.js');
 require('../js/dados.js');
-const { criarStore, quantidadeDeTexto } = require('../js/store.js');
+const { criarStore: criarStoreSemAjuda, quantidadeDeTexto } = require('../js/store.js');
+const criarStore = require('./com-pessoa.js')(criarStoreSemAjuda);
 require('../js/backup.js');
 
 test.beforeEach(() => guardado.clear());
@@ -300,17 +301,21 @@ test('lançar algo por cima dos exemplos protege esses dados de serem apagados n
   assert.equal(s.temExemplos(), true);
 });
 
-test('entrada de dinheiro e doação de itens sem nome viram "Doador anônimo"; com nome, fica o nome', () => {
-  const s = criarStore();
+test('quem doou e para quem foi o dinheiro são obrigatórios; anônima só marcada (1.7.0)', () => {
+  const s = criarStoreSemAjuda();
+  const QUEM_DOOU = 'Informe quem doou ou marque “Doação anônima”.';
   for (const pessoa of [undefined, '', '   ']) {
-    const r = s.registrar({ tipo: 'entrada_dinheiro', valor: '10', descricao: 'Pix', pessoa });
-    assert.equal(r.movimento.pessoa, 'Doador anônimo');
+    assert.equal(s.registrar({ tipo: 'entrada_dinheiro', valor: '10', descricao: 'Pix', pessoa }).erro, QUEM_DOOU);
+    assert.equal(s.registrar({ tipo: 'doacao_item', itemId: 'arroz', quantidade: 1, pessoa }).erro, QUEM_DOOU);
+    assert.equal(s.registrar({ tipo: 'saida_dinheiro', valor: '1', descricao: 'Pão', pessoa }).erro, 'Informe para quem foi o dinheiro.');
   }
+  assert.equal(s.registrar({ tipo: 'entrada_dinheiro', valor: '10', descricao: 'Pix', anonimo: true }).movimento.pessoa, 'Doador anônimo');
+  // Marcada como anônima, o nome digitado não vale.
+  assert.equal(s.registrar({ tipo: 'doacao_item', itemId: 'arroz', quantidade: 1, pessoa: 'Ana', anonimo: true }).movimento.pessoa, 'Doador anônimo');
   assert.equal(s.registrar({ tipo: 'entrada_dinheiro', valor: '10', descricao: 'Pix', pessoa: ' Maria ' }).movimento.pessoa, 'Maria');
-  assert.equal(s.registrar({ tipo: 'doacao_item', itemId: 'arroz', quantidade: 1 }).movimento.pessoa, 'Doador anônimo');
-  assert.equal(s.registrar({ tipo: 'doacao_item', itemId: 'arroz', quantidade: 1, pessoa: 'Mercado' }).movimento.pessoa, 'Mercado');
-  // Despesa e saída de itens sem nome continuam sem nome: ali "quem" não é um doador.
-  assert.equal(s.registrar({ tipo: 'saida_dinheiro', valor: '1', descricao: 'Pão' }).movimento.pessoa, '');
+  assert.equal(s.registrar({ tipo: 'saida_dinheiro', valor: '1', descricao: 'Pão', pessoa: 'Padaria' }).movimento.pessoa, 'Padaria');
+  assert.equal(s.registrar({ tipo: 'saida_dinheiro', valor: '1', pessoa: 'Padaria' }).erro, 'Diga com o que o dinheiro foi gasto.');
+  // Saída de itens continua sem exigir "para onde foi".
   assert.equal(s.registrar({ tipo: 'saida_item', itemId: 'arroz', quantidade: 1 }).movimento.pessoa, '');
 });
 

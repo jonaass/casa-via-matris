@@ -11,7 +11,7 @@ globalThis.sessionStorage = novoEspaco();
 
 require('../js/utilitarios.js');
 require('../js/dados.js');
-const { criarStore } = require('../js/store.js');
+const criarStore = require('./com-pessoa.js')(require('../js/store.js').criarStore);
 require('../js/backup.js');
 require('../js/acesso.js');
 

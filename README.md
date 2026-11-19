@@ -20,6 +20,16 @@ A 1.6.3 deixa o administrador **gerar senha nova** pela página Acessos também 
 A 1.6.4 deixa o administrador **mudar o perfil** de outra pessoa na mesma lista. A pessoa sai e, no próximo acesso,
 entra com o perfil novo. O próprio perfil só outro administrador muda: assim sempre sobra um administrador.
 
+## Versão 1.7
+
+A 1.7.0 traz os pedidos do dono da casa:
+- **Quem doou é obrigatório** na doação de itens e na entrada de dinheiro (também no "+ Chegou" do Estoque).
+  Sem nome, só marcando **"Doação anônima"**.
+- **Despesa pede "Pago a quem?"** além de "Com o que foi gasto?".
+- **Apagar do histórico** (só Administrador, no modo servidor): o que foi desfeito sai do Histórico junto com o
+  lançamento contrário. As linhas continuam no banco, marcadas com quem apagou e quando (migração 006).
+- **Desativar e ativar contas** pela página Acessos, com dois toques. A própria conta não tem o botão.
+
 ## Versão 1.5
 
 A 1.5.0, feita pelo **Miguel**, completa a parte principal do back-end. No modo servidor, **registrar e desfazer
@@ -90,7 +100,7 @@ Testes do back-end (precisa do Python e de `pip install -r backend/requirements.
 python -m pytest backend/tests
 ```
 
-Na 1.6.4 são 122 testes do app, 34 do Miguel e 142 do back-end, e os do back-end rodam também num Postgres
+Na 1.7.0 são 122 testes do app, 34 do Miguel e 145 do back-end, e os do back-end rodam também num Postgres
 no GitHub Actions.
 
 Os testes também rodam sozinhos a cada envio, na aba Actions do GitHub. O site é publicado
@@ -139,7 +149,8 @@ mesmo se eles falharem: confira a aba depois de enviar.
   "apertados" aparecem primeiro. Dá para buscar pelo nome e filtrar por categoria.
 - **Registrar movimentação**: 4 tipos (doação de itens, saída de itens, entrada de dinheiro,
   despesa). O formulário mostra só os campos daquele tipo. Doações podem cadastrar item novo.
-  Doação de itens ou entrada de dinheiro sem nome fica registrada como **"Doador anônimo"** (regra no `store.js`).
+  Desde a 1.7.0, doação pede quem doou ou "Doação anônima" marcada, e despesa pede para quem foi o dinheiro
+  (regra no `store.js` e no servidor). Anônima fica registrada como **"Doador anônimo"**.
 - **Desfazer**: cada linha do histórico tem um botão "Desfazer", com confirmação. Logo depois de registrar, o aviso também oferece o botão por 20 segundos.
   O tempo pausa enquanto o mouse ou o foco do teclado estão em cima do aviso.
 - **Histórico**: filtro por **mês** e por estoque ou dinheiro. Com um mês escolhido, mostra o total
@@ -149,7 +160,7 @@ mesmo se eles falharem: confira a aba depois de enviar.
   senha provisória e registro de atividades. A tabela é montada das mesmas listas que as regras usam.
   No modo servidor (1.6.1), o administrador também libera o acesso pela página: a conta é criada no servidor com
   senha provisória, e a lista mostra as pessoas do servidor. Desde a 1.6.3, "Gerar senha" dá uma senha provisória
-  nova (e desbloqueia); desde a 1.6.4, o perfil muda na lista. Desativar ainda é feito com `python -m backend.usuarios`.
+  nova (e desbloqueia); desde a 1.6.4, o perfil muda na lista; desde a 1.7.0, "Desativar" e "Ativar" também.
 - **Backup**: baixa 3 planilhas (estoque, doações, dinheiro) e restaura delas, mesmo depois de editadas no Excel. Avisa quando o último backup tem mais de 7 dias.
 - **Dados de exemplo**: aparecem na primeira abertura. "Começar do zero" apaga tudo para o uso real.
 - **App no celular**: instala na tela inicial e abre sem internet.
@@ -219,6 +230,8 @@ Quando o site é aberto pelo servidor, depois do login ele **puxa os dados do ba
 | `criarConta`, `listarContas` | `POST /api/contas`, `GET /api/contas` (só administrador) | pronta (1.6.1) |
 | `mudarMinimo` | `POST /api/itens/{codigo}/minimo` (Administrador e Almoxarifado) | pronta (1.6.2) |
 | `redefinirSenhaDe` | `POST /api/contas/senha` (só administrador, nunca a própria) | pronta (1.6.3) |
+| `alterarConta` (ativo) | `POST /api/contas/ativo` (só administrador, nunca a própria) | pronta (1.7.0) |
+| apagar desfeito | `POST /api/movimentos/{codigo}/apagar` (só administrador; marca, não apaga do banco) | pronta (1.7.0) |
 | `alterarConta` (perfil) | `POST /api/contas/perfil` (só administrador, nunca o próprio) | pronta (1.6.4) |
 | `registrar(entrada)`   | `POST /api/movimentos`               | pronta (1.5.0) |
 | `estornar(id)`         | `POST /api/movimentos/{id}/estorno`  | pronta (1.5.0): grava o lançamento contrário |

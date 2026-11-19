@@ -398,6 +398,16 @@ def test_manter_conectado_dura_30_dias(cliente):
 # ---------- gravar pela API: registrar e desfazer (versão 1.5.0) ----------
 
 def gravar(cliente, **corpo):
+    # Desde a 1.7.0, doação pede quem doou (ou anônima) e despesa pede para quem foi. Os testes antigos
+    # lançam sem isso; aqui completa. As regras novas são testadas com gravar_como_veio.
+    if corpo.get("tipo") in ("doacao_item", "entrada_dinheiro") and not corpo.get("pessoa") and "anonimo" not in corpo:
+        corpo["anonimo"] = True
+    if corpo.get("tipo") == "saida_dinheiro" and not corpo.get("pessoa"):
+        corpo["pessoa"] = "Mercado"
+    return gravar_como_veio(cliente, **corpo)
+
+
+def gravar_como_veio(cliente, **corpo):
     return cliente.post("/api/movimentos", json=corpo, headers=ORIGEM)
 
 
@@ -431,7 +441,7 @@ def test_doacao_com_item_novo_e_saida_gravam_com_os_campos_do_app(cliente):
     entrar(cliente, "almoxarifado")
     r = item_novo(cliente, quantidade="2,5")
     mov, item = r["movimento"], r["item"]
-    assert mov["pessoa"] == "Doador anônimo"  # doação sem nome, como no store.js
+    assert mov["pessoa"] == "Doador anônimo"  # "Doação anônima" marcada, como no store.js
     assert mov["criouItem"] is True and mov["validadeAnterior"] is None and mov["data"] == movimentos.hoje()
     assert item["quantidade"] == 2.5 and item["minimo"] == 1
     # A resposta tem os mesmos campos da lista (GET), para o site usar sem converter.
@@ -1088,3 +1098,66 @@ def test_administrador_muda_o_perfil_pelo_site(cliente):
     assert outro.get("/api/itens").status_code == 401  # a sessão antiga foi fechada
     entrar(outro, "almoxarifado")
     assert outro.get("/api/itens").status_code == 403 and outro.get("/api/dinheiro").status_code == 200
+
+
+def test_quem_doou_e_para_quem_foi_sao_obrigatorios(cliente, con):
+    """1.7.0: as mesmas mensagens do store.js, e nada gravado quando recusa."""
+    entrar(cliente, "administrador")
+    caixa_com(con)
+    item = item_novo(cliente)["item"]["codigo"]
+    quem_doou = {"erro": "Informe quem doou ou marque “Doação anônima”.", "campo": "pessoa"}
+    for pessoa in (None, "", "   "):
+        assert gravar_como_veio(cliente, tipo="entrada_dinheiro", valorCentavos=100, descricao="Pix", pessoa=pessoa).json() == quem_doou
+        assert gravar_como_veio(cliente, tipo="doacao_item", itemId=item, quantidade=1, pessoa=pessoa).json() == quem_doou
+        r = gravar_como_veio(cliente, tipo="saida_dinheiro", valorCentavos=100, descricao="Pão", pessoa=pessoa)
+        assert r.status_code == 422 and r.json() == {"erro": "Informe para quem foi o dinheiro.", "campo": "pessoa"}
+    r = gravar_como_veio(cliente, tipo="doacao_item", itemId=item, quantidade=1, pessoa="Ana", anonimo=True)
+    assert r.json()["movimento"]["pessoa"] == "Doador anônimo"
+    assert gravar_como_veio(cliente, tipo="saida_dinheiro", valorCentavos=100, descricao="Pão",
+                            pessoa="Padaria").json()["movimento"]["pessoa"] == "Padaria"
+    assert gravar_como_veio(cliente, tipo="saida_item", itemId=item, quantidade=1).status_code == 200
+
+
+def test_administrador_apaga_do_historico_o_que_foi_desfeito(cliente, con):
+    """POST /api/movimentos/{codigo}/apagar (1.7.0): só o par desfeito, só o administrador; o banco guarda."""
+    entrar(cliente, "administrador")
+    caixa_com(con)
+    mov = gravar(cliente, tipo="entrada_dinheiro", valorCentavos=500, descricao="Bazar", pessoa="Ana").json()["movimento"]
+    assert cliente.post(f"/api/movimentos/{mov['codigo']}/apagar", headers=ORIGEM).status_code == 409  # não desfeito
+    contrario = desfazer(cliente, mov["codigo"]).json()["movimento"]
+    entrar(cliente, "financeiro")
+    assert cliente.post(f"/api/movimentos/{mov['codigo']}/apagar", headers=ORIGEM).status_code == 403
+    entrar(cliente, "administrador")
+    assert cliente.post(f"/api/movimentos/{mov['codigo']}/apagar").status_code == 403  # sem Origin (CSRF)
+    saldo_antes = saldo(con)
+    r = cliente.post(f"/api/movimentos/{contrario['codigo']}/apagar", headers=ORIGEM)  # pelo contrário também vale
+    assert r.status_code == 200 and sorted(r.json()["apagados"]) == sorted([mov["codigo"], contrario["codigo"]])
+    codigos = {m["codigo"] for m in cliente.get("/api/dinheiro").json()}
+    assert mov["codigo"] not in codigos and contrario["codigo"] not in codigos
+    assert saldo(con) == saldo_antes  # o par somava zero; o saldo não muda
+    linhas = con.execute("SELECT apagado_por FROM dinheiro WHERE codigo IN (?, ?)", (mov["codigo"], contrario["codigo"])).fetchall()
+    assert [l[0] for l in linhas] == ["Administrador", "Administrador"]  # continua no banco, com quem apagou
+    assert cliente.post(f"/api/movimentos/{mov['codigo']}/apagar", headers=ORIGEM).status_code == 404
+    item = item_novo(cliente)
+    desfazer(cliente, item["movimento"]["codigo"])
+    assert cliente.post(f"/api/movimentos/{item['movimento']['codigo']}/apagar", headers=ORIGEM).status_code == 200
+    assert item["movimento"]["codigo"] not in {m["codigo"] for m in cliente.get("/api/doacoes").json()}
+
+
+def test_administrador_desativa_e_ativa_conta_pelo_site(cliente):
+    """POST /api/contas/ativo (1.7.0): só o administrador, nunca a própria; desativar fecha as sessões."""
+    outro = TestClient(app)
+    assert entrar(outro, "voluntario").status_code == 200
+    pedido = {"email": "Voluntario@Teste.com", "ativo": False}
+    entrar(cliente, "financeiro")
+    assert cliente.post("/api/contas/ativo", json=pedido, headers=ORIGEM).status_code == 403
+    entrar(cliente, "administrador")
+    assert cliente.post("/api/contas/ativo", json=pedido).status_code == 403  # sem Origin (CSRF)
+    assert cliente.post("/api/contas/ativo", json={"email": "administrador@teste.com", "ativo": False}, headers=ORIGEM).status_code == 400
+    assert cliente.post("/api/contas/ativo", json={**pedido, "email": "ninguem@teste.com"}, headers=ORIGEM).status_code == 404
+    assert cliente.post("/api/contas/ativo", json=pedido, headers=ORIGEM).status_code == 200
+    assert outro.get("/api/itens").status_code == 401
+    assert next(c for c in cliente.get("/api/contas").json() if c["email"] == "voluntario@teste.com")["ativo"] is False
+    assert entrar(outro, "voluntario").status_code == 401
+    assert cliente.post("/api/contas/ativo", json={**pedido, "ativo": True}, headers=ORIGEM).status_code == 200
+    assert entrar(outro, "voluntario").status_code == 200

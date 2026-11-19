@@ -2075,6 +2075,17 @@ input[type='date'],
   font-size: 0.9375rem;
 }
 
+.item-rapido .marcar {
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+/* A regra de baixo estica os campos da linha; a caixinha de marcar fica do tamanho dela. */
+.item-rapido-linha .marcar input {
+  flex: none;
+  width: 20px;
+}
+
 .item-rapido-linha {
   display: flex;
   flex-wrap: wrap;

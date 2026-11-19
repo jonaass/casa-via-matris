@@ -289,7 +289,13 @@
         descricao: texto(entrada.descricao, 120),
         pessoa: texto(entrada.pessoa, 80),
       };
-      if (TIPOS_DE_DOACAO.includes(entrada.tipo) && !mov.pessoa) mov.pessoa = DOADOR_ANONIMO;
+      // Desde a 1.7.0, quem doou e para quem foi o dinheiro são obrigatórios (pedido da casa).
+      // Doação sem nome só com "Doação anônima" marcada, para ninguém esquecer de perguntar.
+      if (TIPOS_DE_DOACAO.includes(entrada.tipo)) {
+        if (entrada.anonimo === true) mov.pessoa = DOADOR_ANONIMO;
+        else if (!mov.pessoa) return falha('Informe quem doou ou marque “Doação anônima”.');
+      }
+      if (entrada.tipo === 'saida_dinheiro' && !mov.pessoa) return falha('Informe para quem foi o dinheiro.');
       return tipo.area === 'estoque' ? registrarEstoque(entrada, mov, hoje) : registrarDinheiro(entrada, mov);
     }
 

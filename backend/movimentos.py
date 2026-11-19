@@ -203,8 +203,15 @@ def registrar(con: sqlite3.Connection, perfil: str, entrada: dict) -> dict:
         "codigo": secrets.token_hex(8), "tipo": tipo, "data": data, "criado_em": _agora_utc(),
         "descricao": texto(entrada.get("descricao"), 120), "pessoa": texto(entrada.get("pessoa"), 80),
     }
-    if tipo in TIPOS_DE_DOACAO and not mov["pessoa"]:
-        mov["pessoa"] = DOADOR_ANONIMO
+    # Desde a 1.7.0, quem doou e para quem foi o dinheiro são obrigatórios (pedido da casa).
+    # Doação sem nome só com "Doação anônima" marcada, para ninguém esquecer de perguntar.
+    if tipo in TIPOS_DE_DOACAO:
+        if entrada.get("anonimo") is True:
+            mov["pessoa"] = DOADOR_ANONIMO
+        elif not mov["pessoa"]:
+            raise Recusa("Informe quem doou ou marque “Doação anônima”.", "pessoa")
+    if tipo == "saida_dinheiro" and not mov["pessoa"]:
+        raise Recusa("Informe para quem foi o dinheiro.", "pessoa")
 
     if TIPOS[tipo]["area"] == "estoque":
         return _em_transacao(con, lambda: _registrar_estoque(con, entrada, mov, dia))
@@ -417,3 +424,28 @@ def mudar_minimo(con: sqlite3.Connection, usuario, codigo: str, minimo) -> dict:
                     (novo, usuario["nome"], _agora_utc(), codigo))
         return {"item": item_publico(_item(con, codigo))}
     return _em_transacao(con, gravar)
+
+
+# ---------- tirar do histórico o que foi desfeito (1.7.0) ----------
+
+def apagar_desfeito(con: sqlite3.Connection, usuario, codigo: str) -> dict:
+    """Marca como apagados um movimento desfeito e o lançamento contrário dele (os dois juntos).
+    Só o administrador. Nada sai do banco: as listas só deixam de mandar as linhas marcadas."""
+    if not seguranca.pode(usuario["perfil"], "administrar"):
+        raise Recusa(NEGADO, status=403)
+
+    def marcar():
+        for tabela in ("doacoes", "dinheiro"):
+            m = con.execute(f"SELECT codigo, estorno_de, apagado_em FROM {tabela} WHERE codigo = ?", (codigo,)).fetchone()
+            if m is not None:
+                break
+        if m is None or m["apagado_em"]:
+            raise Recusa("Essa movimentação não existe mais.", status=404)
+        original = m["estorno_de"] or m["codigo"]
+        contrario = con.execute(f"SELECT codigo FROM {tabela} WHERE estorno_de = ?", (original,)).fetchone()
+        if contrario is None:
+            raise Recusa("Só dá para apagar do histórico o que já foi desfeito.", status=409)
+        con.execute(f"UPDATE {tabela} SET apagado_em = ?, apagado_por = ? WHERE codigo IN (?, ?)",
+                    (_agora_utc(), usuario["nome"], original, contrario["codigo"]))
+        return {"ok": True, "apagados": [original, contrario["codigo"]]}
+    return _em_transacao(con, marcar)

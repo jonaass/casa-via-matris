@@ -382,6 +382,7 @@
             <div class="campo">
               <label for="f-pessoa" id="r-pessoa">Quem doou?</label>
               <input id="f-pessoa" name="pessoa" maxlength="80" autocomplete="off" aria-describedby="f-pessoa-dica">
+              <label class="marcar" id="f-anonimo-caixa" hidden><input type="checkbox" id="f-anonimo" name="anonimo"><span>Doação anônima</span></label>
               <p class="dica" id="f-pessoa-dica" hidden></p>
             </div>
 
@@ -470,8 +471,7 @@
             <p class="painel-ajuda" id="contas-servidor" hidden>Com o servidor da casa, as contas ficam no servidor, e não
               neste aparelho. Libere o acesso abaixo: a pessoa recebe uma senha provisória e cria a própria senha no primeiro
               acesso. Quem esqueceu a senha ou ficou bloqueado recebe outra em "Gerar senha". O perfil muda na
-              lista (a pessoa entra de novo com o perfil novo). Desativar quem saiu da equipe ainda é feito com o comando
-              <code>python -m backend.usuarios</code> (o passo a passo está em backend/README.md).</p>
+              lista (a pessoa entra de novo com o perfil novo), e quem saiu da equipe é desativado no botão "Desativar".</p>
           </div>
           <ul class="contas" id="lista-contas"></ul>
           <div class="senha-gerada" id="senha-gerada" role="status" hidden>

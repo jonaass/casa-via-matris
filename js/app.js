@@ -301,6 +301,10 @@
           }),
           el('button', { type: 'submit', class: 'botao botao-pequeno' }, BOTAO_RAPIDO[rapido.tipo]),
           el('button', { type: 'button', class: 'botao-fantasma', 'data-rapido': 'cancelar' }, 'Cancelar')),
+        rapido.tipo === 'doacao_item' && el('label', { for: `${id}-pessoa` }, 'Quem doou?'),
+        rapido.tipo === 'doacao_item' && el('div', { class: 'item-rapido-linha' },
+          el('input', { id: `${id}-pessoa`, name: 'pessoa', maxlength: 80, autocomplete: 'off', placeholder: 'Ex.: Paróquia São José' }),
+          el('label', { class: 'marcar' }, el('input', { type: 'checkbox', name: 'anonimo' }), el('span', {}, 'Doação anônima'))),
         el('p', { class: 'erro', id: `${id}-erro`, role: 'alert' }),
         rapido.tipo !== 'minimo' && el('button', { type: 'button', class: 'link item-rapido-mais', 'data-rapido': 'detalhes' },
           rapido.tipo === 'saida_item' ? 'Informar para onde foi e o motivo' : 'Informar doador e validade'));
@@ -356,12 +360,17 @@
     const formRapido = e.target;
     const { codigo, tipo } = rapido;
     if (tipo === 'minimo') { await salvarMinimo(formRapido, codigo); return; }
-    const entrada = { tipo, itemId: codigo, quantidade: formRapido.elements.quantidade.value, data: dataDeHoje() };
+    const entrada = {
+      tipo, itemId: codigo, quantidade: formRapido.elements.quantidade.value, data: dataDeHoje(),
+      pessoa: formRapido.elements.pessoa?.value ?? '', anonimo: formRapido.elements.anonimo?.checked === true,
+    };
     const r = await comBotaoTravado(formRapido.querySelector('button[type=submit]'), () => registrarMovimento(entrada));
     if (!r.ok) {
       formRapido.querySelector('.erro').textContent = r.erro;
-      formRapido.elements.quantidade.setAttribute('aria-invalid', 'true');
-      formRapido.elements.quantidade.focus();
+      const campo = (r.campo === 'pessoa' || /quem doou/i.test(r.erro)) && formRapido.elements.pessoa
+        ? formRapido.elements.pessoa : formRapido.elements.quantidade;
+      campo.setAttribute('aria-invalid', 'true');
+      campo.focus();
       return;
     }
     const item = store.item(codigo);
@@ -462,16 +471,20 @@
       bloco.querySelectorAll('input, select').forEach((c) => { c.disabled = !visivel; });
     });
     const t = textosPorTipo[tipo];
-    // Deixa claro o que pode ficar em branco, para ninguém travar num campo que não é obrigatório.
-    $('r-pessoa').replaceChildren(t.pessoa, ' ', el('span', { class: 'opcional' }, '(se quiser)'));
-    // Doação de itens ou de dinheiro sem nome fica como "Doador anônimo" (regra no store.js).
-    // Na saída de itens, lembra de usar o setor: o nome de quem é acolhido não pode ir para o sistema.
+    // Deixa claro o que pode ficar em branco. Desde a 1.7.0, só "Para onde foi?" (saída de itens) é opcional.
     const doacao = tipo === 'entrada_dinheiro' || tipo === 'doacao_item';
-    const dica = doacao ? 'Em branco, fica registrado como “Doador anônimo”.'
+    $('r-pessoa').replaceChildren(t.pessoa, ...(tipo === 'saida_item' ? [' ', el('span', { class: 'opcional' }, '(se quiser)')] : []));
+    // Doação: o nome de quem doou ou "Doação anônima" marcada (regra no store.js).
+    // Na saída de itens, lembra de usar o setor: o nome de quem é acolhido não pode ir para o sistema.
+    $('f-anonimo-caixa').hidden = !doacao;
+    $('f-anonimo').disabled = !doacao;
+    if (!doacao) $('f-anonimo').checked = false;
+    $('f-pessoa').disabled = $('f-anonimo').checked;
+    const dica = doacao ? 'Escreva o nome de quem doou ou marque “Doação anônima”.'
       : tipo === 'saida_item' ? 'Use o setor (Cozinha, Limpeza), nunca o nome de quem recebeu.' : '';
     $('f-pessoa-dica').textContent = dica;
     $('f-pessoa-dica').hidden = !dica;
-    $('f-pessoa').placeholder = doacao ? DOADOR_ANONIMO : tipo === 'saida_item' ? 'Ex.: Cozinha' : '';
+    $('f-pessoa').placeholder = doacao ? 'Ex.: Paróquia São José' : tipo === 'saida_item' ? 'Ex.: Cozinha' : 'Ex.: Mercado Bom Preço';
     $('r-descricao').replaceChildren(t.descricao, t.descricaoOpcional ? ' ' : '', t.descricaoOpcional ? el('span', { class: 'opcional' }, '(se quiser)') : '');
     $('f-enviar').textContent = t.botao;
     const item = store.item($('f-item').value);
@@ -503,7 +516,7 @@
   // O servidor diz o campo com problema ({ erro, campo }); no aparelho, o campo sai da mensagem.
   const CAMPOS_DO_SERVIDOR = {
     quantidade: 'f-quantidade', valorCentavos: 'f-valor', itemId: 'f-item', validade: 'f-validade', data: 'f-data',
-    descricao: 'f-descricao', 'novoItem.nome': 'f-novo-nome', 'novoItem.unidade': 'f-novo-unidade',
+    descricao: 'f-descricao', pessoa: 'f-pessoa', 'novoItem.nome': 'f-novo-nome', 'novoItem.unidade': 'f-novo-unidade',
     'novoItem.minimo': 'f-novo-minimo', 'novoItem.categoria': 'f-novo-categoria',
   };
 
@@ -511,6 +524,7 @@
   function campoDoErro(msg, campo = null) {
     if (campo && CAMPOS_DO_SERVIDOR[campo]) return $(CAMPOS_DO_SERVIDOR[campo]);
     const mapa = [
+      [/quem doou|para quem foi/i, 'f-pessoa'],
       [/quantidade|em estoque|saíram/i, 'f-quantidade'],
       [/valor|saldo/i, 'f-valor'],
       [/item da lista|escolha um item/i, 'f-item'],
@@ -545,6 +559,7 @@
       tipo,
       data: dados.data,
       pessoa: dados.pessoa,
+      anonimo: dados.anonimo === 'on',
       descricao: dados.descricao,
       itemId: dados.itemId,
       quantidade: dados.quantidade,
@@ -581,12 +596,19 @@
     // Limpa os campos de conteúdo, mantendo tipo, item e data para lançamentos em sequência.
     ['f-quantidade', 'f-validade', 'f-valor', 'f-pessoa', 'f-descricao', 'f-novo-nome', 'f-novo-unidade'].forEach((id) => { $(id).value = ''; });
     $('f-novo-minimo').value = '0';
+    $('f-anonimo').checked = false;
+    $('f-pessoa').disabled = false;
     if (dados.itemId === NOVO) $('f-item').value = '';
     atualizarTudo();
     $('f-quantidade').disabled ? $('f-valor').focus() : $('f-quantidade').focus();
   });
 
   form.addEventListener('change', (evento) => {
+    if (evento.target.id === 'f-anonimo') {
+      // Anônima: o nome não vale, então o campo fica vazio e travado.
+      if (evento.target.checked) $('f-pessoa').value = '';
+      $('f-pessoa').disabled = evento.target.checked;
+    }
     if (evento.target.name === 'tipo' || evento.target.name === 'itemId') ajustarCampos();
   });
 
@@ -697,6 +719,8 @@
     // movimento já desfeito oferecem "Desfazer" de novo (o servidor recusaria).
     const desfeitos = new Set(visiveis.map((m) => m.estornoDe).filter(Boolean));
     const podeDesfazer = (m) => !m.estornoDe && !desfeitos.has(m.codigo);
+    // 1.7.0: o administrador tira do histórico o par desfeito (o original e o contrário somem juntos).
+    const podeApagar = (m) => modoServidor() && pode('administrar') && (m.estornoDe || desfeitos.has(m.codigo));
     $('corpo-historico').replaceChildren(...movs.map((m) => {
       const tipo = TIPOS[m.tipo];
       const sinal = tipo.sinal > 0 ? '+' : '−';
@@ -722,13 +746,44 @@
           class: pedindoConfirmacao === m.codigo ? 'botao-fantasma perigo' : 'botao-fantasma discreto',
           'data-codigo': m.codigo,
           'aria-label': `${pedindoConfirmacao === m.codigo ? 'Sim, desfazer' : 'Desfazer'} ${tipo.rotulo}, ${valor}, ${dataCurta(m.data)}`,
-        }, pedindoConfirmacao === m.codigo ? 'Sim, desfazer' : 'Desfazer')));
+        }, pedindoConfirmacao === m.codigo ? 'Sim, desfazer' : 'Desfazer'),
+        podeApagar(m) && el('button', {
+          type: 'button',
+          class: apagando === m.codigo ? 'botao-fantasma perigo' : 'botao-fantasma discreto',
+          'data-apagar': m.codigo,
+          'aria-label': `${apagando === m.codigo ? 'Sim, apagar do histórico' : 'Apagar do histórico'} ${tipo.rotulo}, ${valor}, ${dataCurta(m.data)}`,
+        }, apagando === m.codigo ? 'Sim, apagar' : 'Apagar')));
     }));
     $('historico-vazio').hidden = movs.length > 0;
     $('historico-vazio').textContent = visiveis.length
       ? 'Nada encontrado com esses filtros. Troque o mês ou o tipo de movimento.'
       : 'Nada registrado ainda. Use a página Registrar para lançar a primeira movimentação.';
   }
+
+  // Apagar do histórico também pede dois toques. O banco guarda as linhas, marcadas com quem apagou.
+  let apagando = null;
+  let fimDoApagar = null;
+  $('corpo-historico').addEventListener('click', async (e) => {
+    const botao = e.target.closest('button[data-apagar]');
+    if (!botao || conferirSessao()) return;
+    const codigo = botao.dataset.apagar;
+    const focar = () => [...$('corpo-historico').querySelectorAll('button[data-apagar]')].find((b) => b.dataset.apagar === codigo)?.focus();
+    clearTimeout(fimDoApagar);
+    if (apagando !== codigo) {
+      apagando = codigo;
+      desenharHistorico();
+      focar();
+      fimDoApagar = setTimeout(() => { apagando = null; desenharHistorico(); }, 10000);
+      return;
+    }
+    apagando = null;
+    const r = await comBotaoTravado(botao, () => apagarNoServidor(codigo));
+    if (!r.ok) { avisar(r.erro); desenharHistorico(); return; }
+    registrarAuditoria('Apagou do histórico uma movimentação desfeita');
+    atualizarTudo();
+    avisar('Movimentação desfeita apagada do histórico.');
+    $('t-historico')?.focus();
+  });
 
   // Dois toques: o primeiro pede confirmação na própria linha, o segundo desfaz.
   // A confirmação vale por 10 segundos e é cancelada ao trocar de página ou de filtro.
@@ -1071,7 +1126,7 @@
     ];
   }
 
-  // No servidor, a lista mostra as pessoas, muda o perfil e gera senha nova; desativar é feito pelo comando.
+  // No servidor, a lista mostra as pessoas, muda o perfil, gera senha nova e desativa (1.7.0).
   async function desenharContasDoServidor() {
     const lista = await listarContasDoServidor();
     if (!modoServidor()) return;
@@ -1090,7 +1145,33 @@
               el('option', { value: valor, selected: valor === c.perfil }, p.rotulo)))),
         c.email !== conta.email && el('button', {
           type: 'button', class: 'botao-fantasma', 'data-acao': 'senha-servidor', 'aria-label': `Gerar senha provisória para ${c.nome}`,
-        }, 'Gerar senha')))));
+        }, 'Gerar senha'),
+        // Desativar pede dois toques, como na lista do aparelho.
+        c.email !== conta.email && (c.ativo && desativandoEmail === c.email
+          ? el('button', { type: 'button', class: 'botao-fantasma perigo', 'data-acao': 'ativo-servidor', 'aria-label': `Sim, desativar a conta de ${c.nome}` }, 'Sim, desativar')
+          : el('button', { type: 'button', class: 'botao-fantasma', 'data-acao': 'ativo-servidor', 'aria-label': `${c.ativo ? 'Desativar' : 'Ativar'} a conta de ${c.nome}` }, c.ativo ? 'Desativar' : 'Ativar'))))));
+  }
+
+  let desativandoEmail = null;
+  async function ativoPeloServidor(botao) {
+    const li = botao.closest('.conta');
+    const { email } = li.dataset;
+    const nome = li.querySelector('strong').textContent;
+    const ativo = botao.textContent === 'Ativar';
+    const focar = () => [...$('lista-contas').children].find((l) => l.dataset.email === email)?.querySelector('[data-acao="ativo-servidor"]')?.focus();
+    if (!ativo && desativandoEmail !== email) {
+      desativandoEmail = email;
+      await desenharContasDoServidor();
+      focar();
+      setTimeout(async () => { if (desativandoEmail !== email) return; desativandoEmail = null; await desenharContasDoServidor(); }, 10000);
+      return;
+    }
+    desativandoEmail = null;
+    const r = await comBotaoTravado(botao, () => mudarAtivoNoServidor(email, ativo));
+    if (r.ok) registrarAuditoria(ativo ? 'Ativou uma conta' : 'Desativou uma conta', nome);
+    avisar(r.ok ? `${nome}: conta ${ativo ? 'ativada' : 'desativada'}.` : r.erro);
+    await desenharContasDoServidor();
+    focar();
   }
 
   // Esqueceu a senha ou ficou bloqueada: a senha nova também desbloqueia a conta.
@@ -1183,6 +1264,7 @@
     const acao = e.target.closest('button[data-acao]')?.dataset.acao;
     if (!acao || conferirSessao()) return;
     if (acao === 'senha-servidor') { await gerarSenhaPeloServidor(e.target.closest('button')); return; }
+    if (acao === 'ativo-servidor') { await ativoPeloServidor(e.target.closest('button')); return; }
     const codigo = e.target.closest('.conta').dataset.codigo;
     const pessoa = listarContas().find((c) => c.codigo === codigo);
     if (acao === 'senha') {

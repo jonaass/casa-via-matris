@@ -242,7 +242,7 @@
       tipo: entrada.tipo, data: entrada.data || null, itemId: entrada.itemId || null,
       quantidade: numeroOuTexto(entrada.quantidade), validade: entrada.validade || null,
       valorCentavos: Number.isSafeInteger(centavos) ? centavos : null,
-      descricao: entrada.descricao ?? '', pessoa: entrada.pessoa ?? '',
+      descricao: entrada.descricao ?? '', pessoa: entrada.pessoa ?? '', anonimo: entrada.anonimo === true,
     };
     if (entrada.novoItem) {
       corpo.novoItem = {
@@ -287,6 +287,35 @@
   /** Desfaz no banco: o servidor grava o lançamento contrário. Devolve como o store.estornar. */
   function estornarNoServidor(codigo) {
     return enviarGravacao(`api/movimentos/${encodeURIComponent(codigo)}/estorno`, {});
+  }
+
+  /** Tira do histórico um movimento desfeito e o contrário dele (só o administrador). Devolve { ok } ou { ok: false, erro }. */
+  async function apagarNoServidor(codigo) {
+    let r;
+    try {
+      r = await pedir(`api/movimentos/${encodeURIComponent(codigo)}/apagar`, { method: 'POST', body: '{}' });
+    } catch (e) {
+      return falha('A conexão com o servidor caiu. Confira o Histórico antes de tentar de novo.');
+    }
+    if (r.status === 401) return falha('Sua sessão no servidor acabou. Saia e entre de novo.');
+    if (r.status !== 200) return falha((r.corpo && r.corpo.erro) || 'O servidor não apagou. Tente de novo.');
+    try {
+      await puxarColecoes(lerConfig().servidor.pode || []);
+    } catch (e) { /* sem conexão agora: some do histórico na próxima busca */ }
+    return { ok: true };
+  }
+
+  /** Desativa (a pessoa sai de todos os aparelhos) ou reativa a conta de outra pessoa. Devolve { ok } ou { ok: false, erro }. */
+  async function mudarAtivoNoServidor(email, ativo) {
+    let r;
+    try {
+      r = await pedir('api/contas/ativo', { method: 'POST', body: JSON.stringify({ email, ativo }) });
+    } catch (e) {
+      return falha('A conexão com o servidor caiu. Confira a lista antes de tentar de novo.');
+    }
+    if (r.status === 401) return falha('Sua sessão no servidor acabou. Saia e entre de novo.');
+    if (r.status !== 200) return falha((r.corpo && r.corpo.erro) || 'O servidor não mudou a conta. Tente de novo.');
+    return { ok: true };
   }
 
   /** Muda o estoque mínimo no banco. Devolve como o store.mudarMinimo. */
@@ -396,5 +425,5 @@
     if (lerConfig().sairPendente) fecharSessaoNoServidor();
   }
 
-  Object.assign(globalThis, { mudarPerfilNoServidor, gerarSenhaNoServidor, mudarMinimoNoServidor, criarContaNoServidor, listarContasDoServidor, gravarNoServidor, estornarNoServidor, entrarPeloServidor, definirSenhaPeloServidor, aceitarTermosPeloServidor, servidorNoAr, modoServidor, limparCopia, copiaDeOutraPessoa, terminarSaidaPendente, bloqueadoPeloServidor, puxarDoServidor, sairDoServidor, trocarSenhaNoServidor });
+  Object.assign(globalThis, { apagarNoServidor, mudarAtivoNoServidor, mudarPerfilNoServidor, gerarSenhaNoServidor, mudarMinimoNoServidor, criarContaNoServidor, listarContasDoServidor, gravarNoServidor, estornarNoServidor, entrarPeloServidor, definirSenhaPeloServidor, aceitarTermosPeloServidor, servidorNoAr, modoServidor, limparCopia, copiaDeOutraPessoa, terminarSaidaPendente, bloqueadoPeloServidor, puxarDoServidor, sairDoServidor, trocarSenhaNoServidor });
 })();
